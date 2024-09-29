@@ -1,0 +1,9 @@
+/*.o
+/*.map
+/*.sym
+/*.pyc
+/*.pyo
+/*.d81
+/*.prg
+/uart.sock
+/dump.mem
