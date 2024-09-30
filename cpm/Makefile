@@ -1,5 +1,5 @@
-BDOS_START_ADDRESS	= 0xE400
-BDOS_EXACT_SIZE		= 0x1600
+CPM_START_ADDRESS	= 0xE400
+CPM_EXACT_SIZE		= 0x1600
 
 ASM80			= sjasmplus --nologo --msg=war --i8080
 
@@ -13,7 +13,7 @@ cpm22.inc: cpm22.bin cpm22.sym Makefile
 cpm22.bin: cpm22.asm Makefile
 	@echo "----[ DR BDOS: assembling ]----"
 	@rm -f cpm22.bin cpm22.lst cpm22.sym cpm22.inc
-	$(ASM80) -DBDOS_START_ADDRESS=$(BDOS_START_ADDRESS) -DBDOS_EXACT_SIZE=$(BDOS_EXACT_SIZE) --sym=cpm22.sym --raw=cpm22.bin --lst=cpm22.lst cpm22.asm
+	$(ASM80) -DCPM_START_ADDRESS=$(CPM_START_ADDRESS) -DCPM_EXACT_SIZE=$(CPM_EXACT_SIZE) --sym=cpm22.sym --raw=cpm22.bin --lst=cpm22.lst cpm22.asm
 
 bios.inc: bios.bin bios.sym Makefile
 	@echo "----[ BIOS: extracting i8080 BIOS symbols ]----"

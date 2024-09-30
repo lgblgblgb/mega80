@@ -27,7 +27,7 @@ ALL_CALLS	= 17
 	JP	halt_tab + 16	; BIOS_SECTRN
 	; -----------------
 
-	ASSERT	$ - BIOS_START_ADDRESS = ALL_CALLS * 3
+	ASSERT	$ - BIOS_START_ADDRESS = ALL_CALLS * 3, Bad BIOS address jump table being too short or too large.
 
 ; HALT causes the i8080 emulator to run native code for the BIOS call (calculated from the i8080 program counter
 ; offset from "halt_tab"). The emulator is also responsible to do a "RET" operation as its own, so that's why
@@ -53,7 +53,7 @@ halt_tab:
 	HALT	; BIOS_PRSTAT
 	HALT	; BIOS_SECTRN
 
-	ASSERT	$ - BIOS_START_ADDRESS = ALL_CALLS * 4
+	ASSERT	$ - BIOS_START_ADDRESS = ALL_CALLS * 4, Bad BIOS fake op table being too short or too large.
 
 ; ------------------------------------------------------------
 
@@ -63,9 +63,9 @@ halt_tab:
 
 BIOS_END_ADDRESS:
 
-	ASSERT BIOS_END_ADDRESS > BIOS_START_ADDRESS
-	ASSERT BIOS_END_ADDRESS <= 0x10000
-	ASSERT (BIOS_START_ADDRESS & 0xFF) = 0
+	ASSERT BIOS_END_ADDRESS > BIOS_START_ADDRESS, BIOS placement anomaly.
+	ASSERT BIOS_END_ADDRESS <= 0x10000, BIOS overflow at 64K.
+	ASSERT (BIOS_START_ADDRESS & 0xFF) = 0, BIOS is not aligned to 256 byte boundary.
 
 MAX_DRIVES = 1
 STACK_SIZE = 128		; max space for stack
