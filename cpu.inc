@@ -26,6 +26,8 @@
 ;
 ; ----------------------------------------------------------------------------
 
+.DEFINE CPU_EMU_COPYRIGHT "i8080 CPU emulator for MEGA65 (C)2017,2024 LGB Gabor Lenart"
+
 .IMPORT cpu_reset
 .IMPORT cpu_start
 .IMPORT cpu_start_with_ret

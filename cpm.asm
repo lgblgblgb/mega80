@@ -26,6 +26,7 @@
 ;
 ; ----------------------------------------------------------------------------
 
+.DEFINE BIOS_COPYRIGHT "MEGA65 CBIOS for CPM v2.2 (C)2017,2024 LGB Gabor Lenart"
 
 .INCLUDE "mega65.inc"
 .INCLUDE "emu.inc"
@@ -82,42 +83,140 @@ size:	.WORD	M65BDOS_SIZE_BDOS + M65BIOS_SIZE_BIOS	; DMA operation length
 .ENDPROC
 
 
-bios_call_table:
-	.WORD BIOS_BOOT,   BIOS_WBOOT,  BIOS_CONST,  BIOS_CONIN
-	.WORD BIOS_CONOUT, BIOS_LIST,   BIOS_PUNCH,  BIOS_READER
-	.WORD BIOS_HOME,   BIOS_SELDSK, BIOS_SETTRK, BIOS_SETSEC
-	.WORD BIOS_SETDMA, BIOS_READ,   BIOS_WRITE,  BIOS_PRSTAT
-	.WORD BIOS_SECTRN
 
+.PROC	fatal_wboot
+	JSR	write_crlf
+	JSR	reg_dump
+	WRISTR  {"WBOOT on fatal error",13,10}
+	JMP	BIOS_WBOOT
+.ENDPROC
 
 
 .PROC	return_cpu_unimplemented
+	WRISTR  {13,10,"*** Unimp'ed opcode"}
+	JMP	fatal_wboot
 .ENDPROC
 
 
 ; Input: depends on the PC value of the i8080 emulator only!
-.EXPORT	bios_call
-.PROC	bios_call
+;.EXPORT	return_cpu_leave
+.PROC	return_cpu_leave
 	LDA	cpu_pch
 	CMP	#.HIBYTE(M65BIOS_START_BIOS)
 	BNE	@not_halt_tab
 	LDA	cpu_pcl
 	SEC
 	SBC	#M65BIOS_HALT_TAB_LO
-	CMP	#M65BIOS_ALL_CALS
-	BCS	@not_halt_tab
+	CMP	#M65BIOS_ALL_CALLS
+	BCS	@bad_halt_ofs
 	ASL	A
 	TAX
-	JMP	(bios_call_table,X)
+	JMP	(@bios_call_table,X)
 @not_halt_tab:
-	WRISTR	{13,10,"*** Emulation trap not on the BIOS or BDOS pages",13,10}
+	WRISTR	{13,10,"*** Emu trap not on BIOS gw page"}
+	JMP	fatal_wboot
+@bad_halt_ofs:
+	PHA
+	WRISTR	{13,10,"*** Invalid BIOS call #$"}
+	PLA
+	JSR	write_hex_byte
+	JMP	fatal_wboot
+@bios_call_table:
+	.WORD	BIOS_BOOT,   BIOS_WBOOT,  BIOS_CONST,  BIOS_CONIN
+	.WORD	BIOS_CONOUT, BIOS_LIST,   BIOS_PUNCH,  BIOS_READER
+	.WORD	BIOS_HOME,   BIOS_SELDSK, BIOS_SETTRK, BIOS_SETSEC
+	.WORD	BIOS_SETDMA, BIOS_READ,   BIOS_WRITE,  BIOS_PRSTAT
+	.WORD	BIOS_SECTRN
 .ENDPROC
 
+
+.PROC	go_cpm
+	; Set SP to $FFFF
+	LDA	#$FF
+	STA	cpu_spl
+	STA	cpu_sph
+	; Set PC to M65BDOS_CBASE (label CBASE in CPM22.ASM = entry point of CCP)
+	LDA	#.LOBYTE(M65BDOS_CBASE)
+	STA	cpu_pcl
+	LDA	#.HIBYTE(M65BDOS_CBASE)
+	STA	cpu_pch
+	; Start the CPU emulation now
+	JMP	cpu_start
+.ENDPROC
+
+.PROC	BIOS_BOOT
+	WRISTR	{CPU_EMU_COPYRIGHT,13,10,BIOS_COPYRIGHT,13,10,"BDOS,CCP: "}
+	LDX	#0
+:	LDA	bdos_image+8,X		; copyright message inside the BDOS
+	BEQ	:+
+	JSR	write_char
+	INX
+	BRA	:-
+:	JSR	write_crlf
+	JMP	go_cpm
+.ENDPROC
+
+.PROC	BIOS_WBOOT
+	JMP	go_cpm
+.ENDPROC
+
+.PROC	BIOS_CONST
+	JMP	cpu_start_with_ret
+.ENDPROC
+
+.PROC	BIOS_CONIN
+.ENDPROC
 
 .PROC	BIOS_CONOUT
-	LDA	cpu_c
-	JMP	write_char
+	LDA	cpu_c			; character to display in 8080 register 'C'
+	JSR	write_char
+	JMP	cpu_start_with_ret
 .ENDPROC
 
+.PROC	BIOS_LIST
+	JMP	cpu_start_with_ret
+.ENDPROC
 
+.PROC	BIOS_PUNCH
+	JMP	cpu_start_with_ret
+.ENDPROC
 
+.PROC	BIOS_READER
+	JMP	cpu_start_with_ret
+.ENDPROC
+
+.PROC	BIOS_HOME
+	JMP	cpu_start_with_ret
+.ENDPROC
+
+.PROC	BIOS_SELDSK
+	JMP	cpu_start_with_ret
+.ENDPROC
+
+.PROC	BIOS_SETTRK
+	JMP	cpu_start_with_ret
+.ENDPROC
+
+.PROC	BIOS_SETSEC
+	JMP	cpu_start_with_ret
+.ENDPROC
+
+.PROC	BIOS_SETDMA
+	JMP	cpu_start_with_ret
+.ENDPROC
+
+.PROC	BIOS_READ
+	JMP	cpu_start_with_ret
+.ENDPROC
+
+.PROC	BIOS_WRITE
+	JMP	cpu_start_with_ret
+.ENDPROC
+
+.PROC	BIOS_PRSTAT
+	JMP	cpu_start_with_ret
+.ENDPROC
+
+.PROC	BIOS_SECTRN
+	JMP	cpu_start_with_ret
+.ENDPROC

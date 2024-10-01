@@ -21,7 +21,7 @@ PRG		= emu.prg
 LD65_CFG	= emu.ld
 PRG_ON_DISK	= emu
 MAP_FILE	= emu.map
-SOURCES		= console.asm cpu.asm loader.asm main.asm shell.asm fontdata.asm
+SOURCES		= console.asm cpu.asm loader.asm main.asm shell.asm fontdata.asm cpm.asm
 INCLUDES	= $(shell ls *.inc) cpm/bios.inc cpm/cpm22.inc
 OBJECTS		= $(SOURCES:.asm=.o)
 M65_IP		= 192.168.0.65

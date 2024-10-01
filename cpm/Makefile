@@ -1,7 +1,7 @@
 CPM_START_ADDRESS	= 0xE400
 CPM_EXACT_SIZE		= 0x1600
 
-ASM80			= sjasmplus --nologo --msg=war --i8080
+ASM80			= sjasmplus --nologo --msg=war --i8080 --fullpath --color=auto
 
 all: cpm22.bin bios.bin bios.inc cpm22.inc
 
