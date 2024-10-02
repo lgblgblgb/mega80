@@ -3,7 +3,7 @@
 ; Software emulator of the 8080 CPU for the MEGA65, intended for CP/M or such.
 ; Please read comments throughout this source for more information.
 ;
-; Copyright (C)2017 LGB (Gábor Lénárt) <lgblgblgb@gmail.com>
+; Copyright (C)2017,2024 LGB (Gábor Lénárt) <lgblgblgb@gmail.com>
 ;
 ; ----------------------------------------------------------------------------
 ;
@@ -466,29 +466,27 @@ sprite_shaper2:
 ;			JSR	write_hex_byte
 ;			PLA
 	BMI	@invalid		; char codes >= 128 are considered invalid for now, remove it from the queue
-	CMP	#13			; return?
-	BEQ	@accept_key
-	CMP	#3			; stop? [or CTRL-C]
-	BEQ	@accept_key
-	CMP	#20			; del?
-	BEQ	@backspace_trans
-	CMP	#9			; tab?
-	BEQ	@accept_key
-	CMP	#$10			; CTRL-P?
-	BEQ	@accept_key
-	CMP	#$12			; CTRL-R?
-	BEQ	@accept_key
-	CMP	#$13			; CTRL-S?
-	BEQ	@accept_key
-	CMP	#$15			; CTRL-U?
-	BEQ	@accept_key
-	CMP	#$18			; CTRL-X?
-	BEQ	@accept_key
-	CMP	#$1A			; CTRL-Z? [eof marker]
-	BEQ	@accept_key
 	CMP	#32
-	BCC	@invalid
-	BRA	@accept_key
+	BCS	@accept_key		; 32 ... 127 is OK
+	CMP	#20			; DEL?
+	BEQ	@backspace_trans
+	LDX	#@list_of_valid_keys_last
+:	CMP	@list_of_valid_keys,X
+	BEQ	@accept_key
+	DEX
+	BPL	:-
+	BRA	@invalid
+@list_of_valid_keys:	; List of valid keys in the 0-31 ASCII range
+	.BYTE	$03	; STOP (or CTRL-C)
+	.BYTE	$09	; TAB
+	.BYTE	$0D	; return
+	.BYTE	$10	; CTRL-P
+	.BYTE	$12	; CTRL-R
+	.BYTE	$13	; CTRL-S
+	.BYTE	$15	; CTRL-U
+	.BYTE	$18	; CTRL-X
+	.BYTE	$1A	; CTRL-Z (used as EOF marker in CP/M)
+@list_of_valid_keys_last = * - @list_of_valid_keys - 1
 @already_has:
 	INC	key_timing
 	BNE	@end_scan

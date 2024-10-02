@@ -1,6 +1,6 @@
-## Software i8080 and CP/M emulator for MEGA65
+## i8080 CPU emulator and CP/M v2.2 compatible BIOS for MEGA65
 ##
-## Copyright (C)2017 LGB (Gábor Lénárt) <lgblgblgb@gmail.com>
+## Copyright (C)2017,2024 LGB (Gábor Lénárt) <lgblgblgb@gmail.com>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by

@@ -321,6 +321,8 @@ boot:
 	JSR	command_processor
 	WRISTR	{"Entering into i8080 mode",13,10,13,10}
 	JSR	press_a_key
+		.IMPORT	START_CPM
+		JMP	START_CPM
 	JMP	cpu_start
 .ENDPROC
 
@@ -353,7 +355,7 @@ boot:
 
 
 ; i8080 emulator will jump here on "cpu_leave" event
-.EXPORT	return_cpu_leave
+;.EXPORT	return_cpu_leave
 .PROC	return_cpu_leave
 	LDA	cpu_pch
 	CMP	#BIOSPAGE
