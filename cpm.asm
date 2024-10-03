@@ -41,7 +41,7 @@
 
 ; These must be exactly next to each other in exactly this order:
 bdos_image:	.INCBIN	"cpm/cpm22.bin"
-bios_image:	.INCBIN "cpm/bios.bin"
+bios_image:	.INCBIN "cpm/bios.bin",0,M65BIOS_NONBSS_SIZE
 
 
 .ZEROPAGE
@@ -103,7 +103,6 @@ disk_track:	.RES 2
 	.WORD	BIOS_SECTRN
 .ENDPROC
 
-
 ; *** Common part of BOOT and WBOOT
 
 .PROC	go_cpm
@@ -134,17 +133,18 @@ disk_track:	.RES 2
 	STA	cpu_c			; C=0 -> drive number [with multiple drives it won't preserve current drive this way!]
 
 
-	; Set SP to $FFFF
-	LDA	#$FF
+	; Set up stack
+	LDA	#.LOBYTE(M65BIOS_STACK_TOP)
 	STA	cpu_spl
+	LDA	#.HIBYTE(M65BIOS_STACK_TOP)
 	STA	cpu_sph
 	; Set PC to M65BDOS_CBASE (label CBASE in CPM22.ASM = entry point of CCP)
 	LDA	#.LOBYTE(M65BDOS_CBASE)
 	STA	cpu_pcl
 	LDA	#.HIBYTE(M65BDOS_CBASE)
 	STA	cpu_pch
-	; Start the CPU emulation now
-	JMP	cpu_start
+	; ----
+	RTS
 .ENDPROC
 
 ; --------------------------------------------------------
@@ -155,7 +155,7 @@ disk_track:	.RES 2
 	; Fancy printouts
 	WRISTR	{CPU_EMU_COPYRIGHT,13,10,BIOS_COPYRIGHT,13,10,"CP/M: "}
 	LDX	#0
-:	LDA	bdos_image+8,X		; copyright message inside the BDOS
+:	LDA	bdos_image+8,X		; DR's copyright message inside the BDOS: let's print that out as well!
 	BEQ	:+
 	JSR	write_char
 	INX
@@ -173,14 +173,14 @@ disk_track:	.RES 2
 	.WORD	0					; modulo: not used
 	.BYTE	$A,0					; --- second job --- enhanced mode opts
 	.BYTE	0					; DMA command, and other info, here: copy op, not chained!!!
-	.WORD	M65BDOS_SIZE_BDOS + M65BIOS_SIZE_BIOS	; DMA operation length
+	.WORD	M65BDOS_SIZE_BDOS + M65BIOS_NONBSS_SIZE	; DMA operation length
 	.WORD	bdos_image				; source addr
 	.BYTE	0					; source bank + other info
 	.WORD	M65BDOS_START_BDOS			; target addr
 	.BYTE	I8080_BANK				; target bank + other info
 	.WORD	0					; modulo: not used
 	LDZ	#0
-	; Set up CP/M zero-page (not to be confused with 65xx zero page ...)
+	; Set up CP/M zero-page 32 bit pointer (not to be confused with 65xx zero page ...)
 	STZ	cpm_zp_ptr32
 	STZ	cpm_zp_ptr32+1
 	STZ	cpm_zp_ptr32+3
@@ -199,7 +199,9 @@ disk_track:	.RES 2
 
 ;	:	INC	$D020
 ;		JMP	:-
-	JMP	go_cpm
+	JSR	go_cpm
+	WRISTR	{"Enter via BOOT",13,10}
+	JMP	cpu_start
 .ENDPROC
 
 START_CPM = BIOS_BOOT
@@ -211,15 +213,48 @@ START_CPM = BIOS_BOOT
 ; --------------------------------------------------------
 
 .PROC	BIOS_WBOOT
-	JMP	go_cpm
+	; Copy BDOS/CCP only (not the BIOS itself!)
+	STA	$D707					; trigger in-line DMA
+	.BYTE	$A,0					; --- second job --- enhanced mode opts
+	.BYTE	0					; DMA command, and other info, here: copy op, not chained!!!
+	.WORD	M65BDOS_SIZE_BDOS			; DMA operation length
+	.WORD	bdos_image				; source addr
+	.BYTE	0					; source bank + other info
+	.WORD	M65BDOS_START_BDOS			; target addr
+	.BYTE	I8080_BANK				; target bank + other info
+	.WORD	0					; modulo: not used
+	JSR	go_cpm
+	WRISTR	{"Enter via WBOOT",13,10}
+	JMP	cpu_start
 .ENDPROC
 
+; --------------------------------------------------------
+; BIOS_CONST: Check console status
+;             Input:  -
+;             Output: A=0 no char, A=$FF char available
+; --------------------------------------------------------
 .PROC	BIOS_CONST
+	JSR	conin_check_status
+	STA	cpu_a
 	JMP	cpu_start_with_ret
 .ENDPROC
 
+; --------------------------------------------------------
+; BIOS_CONIN: Get character from console (with waiting)
+;             Input:  -
+;             Output: A = character
+; --------------------------------------------------------
 .PROC	BIOS_CONIN
+	JSR	conin_get_with_wait
+	STA	cpu_a
+	JMP	cpu_start_with_ret
 .ENDPROC
+
+; --------------------------------------------------------
+; BIOS_CONOUT: Display character
+;              Input:  C = character
+;              Output: -
+; --------------------------------------------------------
 
 .PROC	BIOS_CONOUT
 	LDA	cpu_c			; character to display in 8080 register 'C'
@@ -228,19 +263,26 @@ START_CPM = BIOS_BOOT
 .ENDPROC
 
 .PROC	BIOS_LIST
+	; Nothing to do, just return [TODO: sure?]
 	JMP	cpu_start_with_ret
 .ENDPROC
 
 .PROC	BIOS_PUNCH
+	; Nothing to do, just return
 	JMP	cpu_start_with_ret
 .ENDPROC
 
 .PROC	BIOS_READER
+	; Return with $1A in A
+	LDA	#$1A
+	STA	cpu_a
 	JMP	cpu_start_with_ret
 .ENDPROC
 
 ; --------------------------------------------------------
-; BIOS_SECTRN: Set track zero
+; BIOS_SECTRN: Set selected track to zero
+;              Input:  -
+;              Output: -
 ; --------------------------------------------------------
 
 .PROC	BIOS_HOME
@@ -250,12 +292,32 @@ START_CPM = BIOS_BOOT
 	JMP	cpu_start_with_ret
 .ENDPROC
 
+; --------------------------------------------------------
+; BIOS_SELDSK: Select disk
+;              Input:  C = drive to select
+;              Output: HL = BIOS disk struct OR zero (error)
+; --------------------------------------------------------
+
 .PROC	BIOS_SELDSK
+	;BRA	error
+	LDA	cpu_c
+	BNE	error		; currently one drive is supported (drive zero) only, thus non-zero value is an error
+	LDA	#.LOBYTE(M65BIOS_DPH)
+	STA	cpu_l
+	LDA	#.HIBYTE(M65BIOS_DPH)
+	STA	cpu_h
+	JMP	cpu_start_with_ret
+error:
+	LDA	#0
+	STA	cpu_l
+	STA	cpu_h
 	JMP	cpu_start_with_ret
 .ENDPROC
 
 ; --------------------------------------------------------
-; BIOS_SECTRN: Set track for disk-IO according to BC
+; BIOS_SECTRN: Set track for disk I/O
+;              Input:  BC = select track number
+;              Output: -
 ; --------------------------------------------------------
 
 .PROC	BIOS_SETTRK
@@ -267,7 +329,9 @@ START_CPM = BIOS_BOOT
 .ENDPROC
 
 ; --------------------------------------------------------
-; BIOS_SETSEC: Set sector for disk-IO according to BC
+; BIOS_SETSEC: Set sector for disk I/O
+;              Input:  BC = select sector number
+;              Output: -
 ; --------------------------------------------------------
 
 .PROC	BIOS_SETSEC
@@ -279,7 +343,9 @@ START_CPM = BIOS_BOOT
 .ENDPROC
 
 ; --------------------------------------------------------
-; BIOS_SETDMA: Set CP/M DMA according to register BC
+; BIOS_SETDMA: Set CP/M DMA
+;              Input:  BC = address of DMA area to set
+;              Output: -
 ; --------------------------------------------------------
 
 .PROC	BIOS_SETDMA
@@ -290,24 +356,59 @@ START_CPM = BIOS_BOOT
 	JMP	cpu_start_with_ret
 .ENDPROC
 
+; --------------------------------------------------------
+; BIOS_READ: Read sector from disk
+;            Input:  -
+;            Output: A = opresult: 0=OK, 1=ERROR
+; --------------------------------------------------------
+
 .PROC	BIOS_READ
-	; Read attic RAM for now ...
+	; TODO: now a fake stuff: just fill the DMA area with constant value and report OK
+	LDA	cpm_dma
+	STA	addr
+	LDA	cpm_dma+1
+	STA	addr+1
+	STA	$D707					; trigger in-line DMA
+	.BYTE	$A,0					; --- first job --- enhanced mode opts
+	.BYTE	3					; DMA command: fill and not chained
+	.WORD	128					; DMA length: 128 for the CP/M sector size
+	.WORD	0					; source addr, in case of "fill" the low byte is the byte to fill with
+	.BYTE	0					; source bank + other info
+addr:	.WORD	0					; target addr
+	.BYTE	I8080_BANK				; target bank + other info
+	.WORD	0					; modulo: not used
+	LDA	#0		; no error (FIXME: this is bad, we must check track/sector)
+	STA	cpu_a
 	JMP	cpu_start_with_ret
 .ENDPROC
 
+; --------------------------------------------------------
+; BIOS_WRITE: Write sector to disk
+;             Input:  C = deblocking info
+;                         0 = normal sector write
+;                         1 = write to directory sector
+;                         2 = write to the first sector of a new data block
+;             Output: A = opresult: 0=OK, 1=ERROR
+; --------------------------------------------------------
+
 .PROC	BIOS_WRITE
-	; Write attic RAM for now ...
+	; No write is supported currently
+	LDA	#1	; return error
+	STA	cpu_a
 	JMP	cpu_start_with_ret
 .ENDPROC
 
 .PROC	BIOS_PRSTAT
+	LDA	#0	; "not ready"
+	STA	cpu_a
 	JMP	cpu_start_with_ret
 .ENDPROC
 
 ; --------------------------------------------------------
 ; BIOS_SECTRN: Sector translation
-;              Input: BC
-;              Output: HL (we give back BC, for 1:1 skew)
+;              Input:  BC = sector number
+;              Output: HL = translated sector number
+; We give back BC, for 1:1 skew aka "no skew"
 ; --------------------------------------------------------
 
 .PROC	BIOS_SECTRN

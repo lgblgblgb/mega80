@@ -5,5 +5,7 @@
 /*.pyo
 /*.d81
 /*.prg
+/*.lst
 /uart.sock
 /dump.mem
+/serial.raw

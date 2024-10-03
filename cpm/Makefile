@@ -12,8 +12,9 @@ cpm22.inc: cpm22.bin cpm22.sym Makefile
 
 cpm22.bin: cpm22.asm Makefile
 	@echo "----[ DR BDOS: assembling ]----"
-	@rm -f cpm22.bin cpm22.lst cpm22.sym cpm22.inc
-	$(ASM80) -DCPM_START_ADDRESS=$(CPM_START_ADDRESS) -DCPM_EXACT_SIZE=$(CPM_EXACT_SIZE) --sym=cpm22.sym --raw=cpm22.bin --lst=cpm22.lst cpm22.asm
+	@rm -f cpm22.bin cpm22.lst cpm22.sym cpm22.inc cpm22.bin2
+	$(ASM80) -DCPM_START_ADDRESS=$(CPM_START_ADDRESS) -DCPM_EXACT_SIZE=$(CPM_EXACT_SIZE) --sym=cpm22.sym --raw=cpm22.bin2 --lst=cpm22.lst cpm22.asm
+	mv cpm22.bin2 cpm22.bin
 
 bios.inc: bios.bin bios.sym Makefile
 	@echo "----[ BIOS: extracting i8080 BIOS symbols ]----"
@@ -22,8 +23,9 @@ bios.inc: bios.bin bios.sym Makefile
 
 bios.bin: bios.asm cpm22.inc Makefile
 	@echo "----[ BIOS: assembling i8080 BIOS ]----"
-	@rm -f bios.bin bios.lst bios.sym bios.inc
-	$(ASM80) --sym=bios.sym --raw=bios.bin --lst=bios.lst bios.asm
+	@rm -f bios.bin bios.lst bios.sym bios.inc bios.bin2
+	$(ASM80) --sym=bios.sym --raw=bios.bin2 --lst=bios.lst bios.asm
+	mv bios.bin2 bios.bin
 
 clean:
 	rm -f cpm22.bin cpm22.lst cpm22.sym cpm22.inc bios.bin bios.lst bios.sym bios.inc

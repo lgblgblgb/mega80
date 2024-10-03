@@ -550,13 +550,49 @@ sprite_shaper2:
 	ADC	#50
 	STA	$D001	; cursor Y coordinate!
 
-	INC	$84E	; "heartbeat"
+	;INC	$84E	; "heartbeat"
+
+	LDA	cpu_pch
+	LSR	A
+	LSR	A
+	LSR	A
+	LSR	A
+	AND	#15
+	TAX
+	LDA	hextab,X
+	STA	$84C
+	LDA	cpu_pch
+	AND	#15
+	TAX
+	LDA	hextab,X
+	STA	$84D
+	LDA	cpu_pcl
+	LSR	A
+	LSR	A
+	LSR	A
+	LSR	A
+	AND	#15
+	TAX
+	LDA	hextab,X
+	STA	$84E
+	LDA	cpu_pcl
+	AND	#15
+	TAX
+	LDA	hextab,X
+	STA	$84F
+
+
+
+
 	PLZ
 	PLY
 	PLX
 	PLA
 	ASL	$D019	; acknowledge VIC interrupt (note: it wouldn't work on a real C65 as RMW opcodes are different but it does work on M65 as on C64 too!)
 	RTI
+
+hextab:
+	.BYTE	"0123456789ABCDEF"
 .ENDPROC
 
 

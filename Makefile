@@ -51,7 +51,7 @@ cpm/bios.inc cpm/cpm22.inc cpm/bios.bin cpm/cpm22.bin:
 	$(MAKE) -C cpm
 
 %.o: %.asm $(ALL_DEPENDS) $(INCLUDES)
-	$(CA65) $(CA65_OPTS) -o $@ $<
+	$(CA65) $(CA65_OPTS) --listing $(<:.asm=.lst) -o $@ $<
 
 8080/mbasic-real.com:
 	mkdir -p 8080
@@ -70,14 +70,14 @@ ethertest: $(PRG) $(ALL_DEPENDS)
 	$(ETHERLOAD) $(M65_IP) $(PRG)
 
 xemu:	$(PRG)
-	$(XEMU_M65) -fastboot -prg $(PRG)
+	$(XEMU_M65) -hyperserialfile serial.raw -fastboot -prg $(PRG)
 
 clean:
-	$(RM) -f $(PRG) *.o $(DISK_IMAGE) $(MAP_FILE)
+	$(RM) -f $(PRG) *.o *.lst $(DISK_IMAGE) $(MAP_FILE)
 	$(MAKE) -C cpm clean
 
 distclean:
 	$(MAKE) clean
-	$(RM) -f 8080/*.com uart.sock dump.mem
+	$(RM) -f 8080/*.com uart.sock dump.mem serial.raw
 
 .PHONY: all clean distclean xemu ethertest

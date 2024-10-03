@@ -57,9 +57,47 @@ halt_tab:
 
 ; ------------------------------------------------------------
 
+; Terminology is taken from the "Offical CP/M Alteration guide"
+; http://www.gaby.de/cpm/manuals/archive/cpm22htm/ch6.htm
+
+; Disk Parameter Header (DPH)
+M65BIOS_DPH:
+	DW	0		; XLT sector translation table (no xlation done)
+	DW	0		; scratchpad
+	DW	0		; scratchpad
+	DW	0		; scratchpad
+	DW	disk_dirbuf	; system-wide, shared DIRBUF pointer
+	DW	dpb_table	; DPB (Disk Parameter Block) pointer
+	DW	0		; CSV pointer (optional, not implemented), used for software disk change detection
+	DW	alv		; ALV pointer
+
+; Disk Parameter Block (DPB)
+dpb_table:
+	DW	26		; SPT: total number of sectors per track
+	DB	3		; BSH: data allocation block shift factor, determined by the data block allocation size.
+	DB	7		; BLM: data allocation block mask (2[BSH-1]).
+	DB	0		; EXM: extent mask, determined by the data block allocation size and the number of disk blocks.
+	DW	242		; DSM: total storage capacity of the disk drive (max allocation block number)
+	DW	63		; DRM: total number of directory entries that can be stored on this drive.
+	DB	192		; AL0: determine reserved directory blocks.
+	DB	0		; AL1: -- "" ---
+	DW	16		; CKS: size of the directory check vector.
+	DW	2		; OFF: number of reserved tracks at the beginning of the (logical) disk.
 
 
-; ------ END OF BIOS, DO NOT MODIFY ANYTHING AFTER THIS ------
+; ------ ONLY UN'INIT'ED stuff can goes here from this point -----
+
+NONBSS_SIZE = $ - BIOS_START_ADDRESS
+M65BIOS_NONBSS_SIZE = NONBSS_SIZE
+
+STACK_SIZE = 128
+
+disk_dirbuf:	DS	128
+alv:		DS	128
+stack:		DS	STACK_SIZE
+stack_top =	stack + STACK_SIZE
+
+M65BIOS_STACK_TOP = stack_top
 
 BIOS_END_ADDRESS:
 
@@ -67,22 +105,16 @@ BIOS_END_ADDRESS:
 	ASSERT BIOS_END_ADDRESS <= 0x10000, BIOS overflow at 64K.
 	ASSERT (BIOS_START_ADDRESS & 0xFF) = 0, BIOS is not aligned to 256 byte boundary.
 
-MAX_DRIVES = 1
-STACK_SIZE = 128		; max space for stack
-
-;                 /---------- drives -----------\                /----< one WORD for MEGA65 special calls at $FFFF
-BUFFERS_RESERVE = (MAX_DRIVES * (16 + 128)) + 128 + STACK_SIZE + 2
-
 M65BIOS_START_BIOS = BIOS_START_ADDRESS
-M65BIOS_END_BIOS = BIOS_END_ADDRESS
-M65BIOS_SIZE_BIOS = BIOS_END_ADDRESS - BIOS_START_ADDRESS
+;M65BIOS_END_BIOS = BIOS_END_ADDRESS
+;M65BIOS_SIZE_BIOS = BIOS_END_ADDRESS - BIOS_START_ADDRESS
 M65BIOS_HALT_TAB_LO = halt_tab & 0xFF
-M65BIOS_MAX_DRIVES = MAX_DRIVES
-M65BIOS_BUFFER_SPACE = BUFFERS_RESERVE
-M65BIOS_WASTED_PAGES = (0x10000 - BIOS_END_ADDRESS - 1 - BUFFERS_RESERVE) >> 8
+;M65BIOS_MAX_DRIVES = MAX_DRIVES
+;M65BIOS_BUFFER_SPACE = BUFFERS_RESERVE
+M65BIOS_WASTED_PAGES = (0x10000 - BIOS_END_ADDRESS) >> 8
 M65BIOS_ALL_CALLS = ALL_CALLS
 
-M65BIOS_STACK = BIOS_END_ADDRESS + STACK_SIZE
-M65BIOS_DRIVE_STRUCTS = M65BIOS_STACK
+;M65BIOS_STACK = BIOS_END_ADDRESS + STACK_SIZE
+;M65BIOS_DRIVE_STRUCTS = M65BIOS_STACK
 
 
