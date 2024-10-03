@@ -3,7 +3,7 @@
 ; Software emulator of the 8080 CPU for the MEGA65, intended for CP/M or such.
 ; Please read comments throughout this source for more information.
 ;
-; Copyright (C)2017 LGB (Gábor Lénárt) <lgblgblgb@gmail.com>
+; Copyright (C)2017,2024 LGB (Gábor Lénárt) <lgblgblgb@gmail.com>
 ;
 ; ----------------------------------------------------------------------------
 ;
@@ -26,275 +26,445 @@
 ;
 ; ----------------------------------------------------------------------------
 
+.DEFINE MEGA80_COPYRIGHT	"MEGA/80: i8080 emulator and CP/M BIOS for MEGA65 (C)2017,2024 LGB Gabor Lenart"
+.DEFINE BIOS_COPYRIGHT		"MEGA65 CBIOS for CPM v2.2 (C)2017,2024 LGB Gabor Lenart"
 
 .INCLUDE "mega65.inc"
 .INCLUDE "emu.inc"
 .INCLUDE "console.inc"
 .INCLUDE "cpu.inc"
+.INCLUDE "cpm/cpm22.inc"
+.INCLUDE "cpm/bios.inc"
+
 
 .SEGMENT "PAYLOAD"
-	; Experimental way to include a given CP/M program, since we don't have the ability yet, to load something ...
-	; Do not put anything other into this segment only the binary you want to execute!
-	.IMPORT	__PAYLOAD_LOAD__
-	.IMPORT	__PAYLOAD_SIZE__
-	;.INCBIN "8080/cpmver.com"
-	;.INCBIN "8080/cpmver-real.com"
-	;.INCBIN "8080/wow.com"
-	.INCBIN "8080/mbasic-real.com"
+
+
+; These must be exactly next to each other in exactly this order:
+bdos_image:	.INCBIN	"cpm/cpm22.bin"
+bios_image:	.INCBIN "cpm/bios.bin",0,M65BIOS_NONBSS_SIZE
+
 
 .ZEROPAGE
 
-checksum_test:	.RES 4
+cpm_dma:	.RES 2
+cpm_zp_ptr32:	.RES 4
+disk_sector:	.RES 2
+disk_track:	.RES 2
 
 .CODE
 
-; Needs CPU reset for umem_p1 initialized for bank
-;.EXPORT	install_software
-.PROC	install_software
-	WRISTR	{"Constructing CP/M memory and installing user application",13,10}
-	LDA	#.LOBYTE(I8080_BANK)
-	STA	umem_p1+2
-	LDA	#.HIBYTE(I8080_BANK)
-	STA	umem_p1+3
-	; Use DMA for most tasks
-	LDA	#0
-	STA	umem_p1+0
-	STA	$D702
-	LDA	#.HIBYTE(dma_list)
-	STA	$D701
-	LDA	#.LOBYTE(dma_list)
-	STA	$D705			; this will start the DMA operation
-	; Prepare "BIOS page"
-	LDA	#BIOSPAGE
-	STA	umem_p1+1
-	LDY	#$C0
-	LDZ	#0
-fillsyspage:
-	LDA	#JP_OPC_8080
-	STA32Z	umem_p1
-	INZ
-	TYA
-	STA32Z	umem_p1
-	INZ
-	LDA	#BIOSPAGE
-	STA32Z	umem_p1
-	INZ
-	INY
-	BNE	fillsyspage
-	; This is some kind of check only. We makes checksum of the I8080 memory area to compare Xemu and M65 board ...
-	LDZ	#0
-	LDX	#0
-	STZ	checksum_test
-	STZ	checksum_test+1
-	STZ	checksum_test+2
-	STZ	checksum_test+3
-	CLC				; initial well-defined carry value, during the checksum we don't care about carry between dwords though
-do_checksum:
-	STX	umem_p1+1
-	LDY	#3
-checksum_bytes:
-	LDA	checksum_test,Y
-	ADC32Z	umem_p1
-	INZ
-	STA	checksum_test,Y
-	DEY
-	BPL	checksum_bytes
-	TZA				; this will set flags according to 'Z', so we don't need to use CPZ
-	BNE	do_checksum
-	INX
-	CPX	#MEMTOPPAGE
-	BNE	do_checksum
-	WRISTR	"Checksum for prepared memory is "
-	LDY	#3
-checksum_printing:
-	LDA	checksum_test,Y
-	JSR	write_hex_byte
-	DEY
-	BPL	checksum_printing
+
+
+.PROC	fatal_error
 	JSR	write_crlf
-	RTS
-lowpage:
-	.BYTE	JP_OPC_8080, 3, BIOSPAGE	; CP/M BIOS WARM boot entry point
-	.BYTE	0, 0	; I/O byte and disk byte
-	.BYTE	JP_OPC_8080, 0, BDOSPAGE	; CP/M BDOS entry point
-lowpage_bytes = * - lowpage
-dma_list:
-	; Clear the whole i8080 memory area
-	.BYTE	$A,0	; enhanced mode opts
-	.BYTE	4|3	; DMA command, and other info, here chained + copy op
-	.WORD	MEMTOPPAGE*256	; DMA operation length, here: 62K (last 2K is C65 colour RAM for now!)
-	.WORD	0	; source addr, for fill op, the low byte is the fill value
-	.BYTE	0	; source bank + other info
-	.WORD	0	; target addr
-	.BYTE	I8080_BANK	; target bank + other info
-	.WORD	0	; modulo ... no idea, just skip it
-	; Fill BIOS page with HALTs
-	.BYTE	0	; enhanced mode opt
-	.BYTE	4|3
-	.WORD	256
-	.WORD	HALT_OPC_8080
-	.BYTE	0
-	.WORD	BIOSPAGE*256
-	.BYTE	I8080_BANK
-	.WORD	0
-	; Fill BDOS page with HALTs
-	.BYTE	0	; enhanced mode opt
-	.BYTE	4|3
-	.WORD	256
-	.WORD	HALT_OPC_8080
-	.BYTE	0
-	.WORD	BDOSPAGE*256
-	.BYTE	I8080_BANK
-	.WORD	0
-	; Copy low page
-	.BYTE	0	; enhanced mode opt
-	.BYTE	4
-	.WORD	lowpage_bytes
-	.WORD	lowpage
-	.BYTE	0
-	.WORD	0
-	.BYTE	I8080_BANK
-	.WORD	0
-	; Install our software (that is: copy)
-	.BYTE	0	; enhanced mode opt
-	.BYTE	0
-	.WORD	__PAYLOAD_SIZE__
-	.WORD	__PAYLOAD_LOAD__
-	.BYTE	0
-	.WORD	$100
-	.BYTE	I8080_BANK
-	.WORD	0
+	JSR	reg_dump
+	; TODO: add "press a key" and option to boot instead of wboot
+	WRISTR  {"WBOOT on fatal error",13,10}
+:	INC	$D020
+	JMP	:-
+	JMP	BIOS_WBOOT
 .ENDPROC
 
 
-; BDOS function 9 (C_WRITESTR) - Output string
-; Entered with C=9, DE=address of string. End of string marker is '$'
-.PROC	bdos_9
+.EXPORT	return_cpu_unimplemented
+.PROC	return_cpu_unimplemented
+	WRISTR  {13,10,"*** Unimp'd opcode"}
+	JMP	fatal_error
+.ENDPROC
+
+
+; Input: depends on the PC value of the i8080 emulator only!
+.EXPORT	return_cpu_leave
+.PROC	return_cpu_leave
+	LDA	cpu_pch
+	CMP	#.HIBYTE(M65BIOS_START_BIOS)
+	BNE	@not_halt_tab
+	LDA	cpu_pcl
+	SEC
+	SBC	#M65BIOS_HALT_TAB_LO
+	CMP	#M65BIOS_ALL_CALLS
+	BCS	@bad_halt_ofs
+	ASL	A
+	TAX
+	JMP	(@bios_call_table,X)
+@not_halt_tab:
+	WRISTR	{13,10,"*** Emu trap not on BIOS gw page / unexpected HALT opcode"}
+	JMP	fatal_error
+@bad_halt_ofs:
+	PHA
+	WRISTR	{13,10,"*** Invalid BIOS call #$"}
+	PLA
+	JSR	write_hex_byte
+	JMP	fatal_error
+@bios_call_table:
+	.WORD	BIOS_BOOT,   BIOS_WBOOT,  BIOS_CONST,  BIOS_CONIN
+	.WORD	BIOS_CONOUT, BIOS_LIST,   BIOS_PUNCH,  BIOS_READER
+	.WORD	BIOS_HOME,   BIOS_SELDSK, BIOS_SETTRK, BIOS_SETSEC
+	.WORD	BIOS_SETDMA, BIOS_READ,   BIOS_WRITE,  BIOS_PRSTAT
+	.WORD	BIOS_SECTRN
+.ENDPROC
+
+; *** Common part of BOOT and WBOOT
+
+.PROC	go_cpm
+	LDA	#$C3		; "JP" opcode
 	LDZ	#0
-loop:
-	LDA32Z	cpu_de
-	INW	cpu_de
-	CMP	#'$'
-	LBEQ	cpu_start_with_ret
+	STA32Z  cpm_zp_ptr32		; @0
+	INZ
+	LDA	#.LOBYTE(M65BIOS_START_BIOS + 3)
+	STA32Z	cpm_zp_ptr32		; @1
+	INZ
+	LDA	#.HIBYTE(M65BIOS_START_BIOS + 3)
+	STA32Z	cpm_zp_ptr32		; @2
+
+	LDA	#$C3		; "JP" opcode - again
+	LDZ	#5
+	STA32Z	cpm_zp_ptr32		; @5
+	INZ
+	LDA	#.LOBYTE(M65BDOS_FBASE)
+	STA32Z	cpm_zp_ptr32		; @6
+	INZ
+	LDA	#.HIBYTE(M65BDOS_FBASE)
+	STA32Z	cpm_zp_ptr32		; @7
+
+	LDA	#$80
+	STA	cpm_dma
+	LDA	#$00
+	STA	cpm_dma+1
+	STA	cpu_c			; C=0 -> drive number [with multiple drives it won't preserve current drive this way!]
+
+
+	; Set up stack
+	LDA	#.LOBYTE(M65BIOS_STACK_TOP)
+	STA	cpu_spl
+	LDA	#.HIBYTE(M65BIOS_STACK_TOP)
+	STA	cpu_sph
+	; Set PC to M65BDOS_CBASE (label CBASE in CPM22.ASM = entry point of CCP)
+	LDA	#.LOBYTE(M65BDOS_CBASE)
+	STA	cpu_pcl
+	LDA	#.HIBYTE(M65BDOS_CBASE)
+	STA	cpu_pch
+	; ----
+	RTS
+.ENDPROC
+
+; --------------------------------------------------------
+; BIOS_BOOT: Cold boot of CP/M
+; --------------------------------------------------------
+
+.PROC	BIOS_BOOT
+	; Fancy printouts
+	WRISTR	{CPU_EMU_COPYRIGHT,13,10,BIOS_COPYRIGHT,13,10,"CP/M: "}
+	LDX	#0
+:	LDA	bdos_image+8,X		; DR's copyright message inside the BDOS: let's print that out as well!
+	BEQ	:+
 	JSR	write_char
-	JMP	loop
+	INX
+	BNE	:-
+:	JSR	write_crlf
+	; Initialize all memory to zero and copy CCP+BDOS+BIOS to place with DMA
+	STA	$D707					; trigger in-line DMA
+	.BYTE	$A,0					; --- first job --- enhanced mode opts
+	.BYTE	3 + 4					; DMA command: fill AND chained!
+	.WORD	0					; DMA length: 0 should mean 64K
+	.WORD	0					; source addr, in case of "fill" the low byte is the byte to fill with
+	.BYTE	0					; source bank + other info
+	.WORD	0					; target addr
+	.BYTE	I8080_BANK				; target bank + other info
+	.WORD	0					; modulo: not used
+	.BYTE	$A,0					; --- second job --- enhanced mode opts
+	.BYTE	0					; DMA command, and other info, here: copy op, not chained!!!
+	.WORD	M65BDOS_SIZE_BDOS + M65BIOS_NONBSS_SIZE	; DMA operation length
+	.WORD	bdos_image				; source addr
+	.BYTE	0					; source bank + other info
+	.WORD	M65BDOS_START_BDOS			; target addr
+	.BYTE	I8080_BANK				; target bank + other info
+	.WORD	0					; modulo: not used
+	LDZ	#0
+	; Set up CP/M zero-page 32 bit pointer (not to be confused with 65xx zero page ...)
+	STZ	cpm_zp_ptr32
+	STZ	cpm_zp_ptr32+1
+	STZ	cpm_zp_ptr32+3
+	LDA	#I8080_BANK
+	STA	cpm_zp_ptr32+2
+	; To have some default anyway
+	STZ	disk_sector
+	STZ	disk_sector+1
+	STZ	disk_track
+	STZ	disk_track+1
+
+
+
+
+
+
+;	:	INC	$D020
+;		JMP	:-
+	JSR	go_cpm
+	WRISTR	{"Enter via BOOT",13,10}
+	JMP	cpu_start
 .ENDPROC
 
 
+; --------------------------------------------------------
+; BIOS_WBOOT: Warm boot of CP/M
+;             Only reloads CCP and BDOS (not BIOS)
+; --------------------------------------------------------
 
-; BDOS function 12 (S_BDOSVER) - Return version number
-; Entered with C=0Ch. Returns B=H=system type, A=L=version number.
-.PROC	bdos_12
-	LDA	#0
-	STA	cpu_bc+1
-	STA	cpu_hl+1
-	LDA	#$22
-	STA	cpu_af+1
-	STA	cpu_hl
-	JMP	cpu_start_with_ret
+.PROC	BIOS_WBOOT
+	; Copy BDOS/CCP only (not the BIOS itself!)
+	STA	$D707					; trigger in-line DMA
+	.BYTE	$A,0					; --- second job --- enhanced mode opts
+	.BYTE	0					; DMA command, and other info, here: copy op, not chained!!!
+	.WORD	M65BDOS_SIZE_BDOS			; DMA operation length
+	.WORD	bdos_image				; source addr
+	.BYTE	0					; source bank + other info
+	.WORD	M65BDOS_START_BDOS			; target addr
+	.BYTE	I8080_BANK				; target bank + other info
+	.WORD	0					; modulo: not used
+	JSR	go_cpm
+	WRISTR	{"Enter via WBOOT",13,10}
+	JMP	cpu_start
 .ENDPROC
 
-; BIOS CONST  (Returns its status in A; 0 if no character is ready, 0FFh if one is.)
-.PROC	bios_2
+; --------------------------------------------------------
+; BIOS_CONST: Check console status
+;             Input:  -
+;             Output: A=0 no char, A=$FF char available
+; --------------------------------------------------------
+.PROC	BIOS_CONST
 	JSR	conin_check_status
 	STA	cpu_a
 	JMP	cpu_start_with_ret
 .ENDPROC
 
-; BIOS CONIN  (Wait until the keyboard is ready to provide a character, and return it in A.)
-.PROC	bios_3
+; --------------------------------------------------------
+; BIOS_CONIN: Get character from console (with waiting)
+;             Input:  -
+;             Output: A = character
+; --------------------------------------------------------
+.PROC	BIOS_CONIN
 	JSR	conin_get_with_wait
 	STA	cpu_a
 	JMP	cpu_start_with_ret
 .ENDPROC
 
-; BIOS CONOUT (write character in register C)
-.PROC	bios_4
-	LDA	cpu_c
+; --------------------------------------------------------
+; BIOS_CONOUT: Display character
+;              Input:  C = character
+;              Output: -
+; --------------------------------------------------------
+
+.PROC	BIOS_CONOUT
+	LDA	cpu_c			; character to display in 8080 register 'C'
 	JSR	write_char
 	JMP	cpu_start_with_ret
 .ENDPROC
 
-
-bdos_call_table:
-	.WORD	bdos_unknown		; Call $0
-	.WORD	bdos_unknown		; Call $1
-	.WORD	bdos_unknown		; Call $2
-	.WORD	bdos_unknown		; Call $3
-	.WORD	bdos_unknown		; Call $4
-	.WORD	bdos_unknown		; Call $5
-	.WORD	bdos_unknown		; Call $6
-	.WORD	bdos_unknown		; Call $7
-	.WORD	bdos_unknown		; Call $8
-	.WORD	bdos_9			; Call $9: BDOS function 9 (C_WRITESTR) - Output string
-	.WORD	bdos_unknown		; Call $A
-	.WORD	bdos_unknown		; Call $B
-	.WORD	bdos_12			; Call $C: BDOS function 12 (S_BDOSVER) - Return version number
-bdos_call_table_size = (* - bdos_call_table) / 2
-
-
-bios_call_table:
-	.WORD	bios_unknown		; 0: BOOT
-	.WORD	bios_unknown		; 1: WBOOT
-	.WORD	bios_2			; 2: CONST  (Returns its status in A; 0 if no character is ready, 0FFh if one is.)
-	.WORD	bios_3			; 3: CONIN  (Wait until the keyboard is ready to provide a character, and return it in A.)
-	.WORD	bios_4			; 4: CONOUT (write character in register C to the screen)
-bios_call_table_size = (* - bios_call_table) / 2
-
-
-
-.PROC	bdos_unknown
-	WRISTR	{13,10,"*** UNKNOWN BDOS call",13,10}
-	JMP	wboot
+.PROC	BIOS_LIST
+	; Nothing to do, just return [TODO: sure?]
+	JMP	cpu_start_with_ret
 .ENDPROC
 
-
-.PROC	bios_unknown
-	WRISTR	{13,10,"*** UNKNOWN BIOS call: $"}
-	JMP	bios_call_show_and_halt
+.PROC	BIOS_PUNCH
+	; Nothing to do, just return
+	JMP	cpu_start_with_ret
 .ENDPROC
 
-
-
-.PROC	bdos_call
-	LDA	cpu_c		; C register: BDOS call number
-	CMP	#bdos_call_table_size
-	BCS	bdos_unknown_big
-	ASL	A
-	TAX
-	JMP	(bdos_call_table,X)
-bdos_unknown_big:
-	WRISTR	{13,10,"*** UNKNOWN BDOS call (too high)",13,10}
-	JMP	wboot
+.PROC	BIOS_READER
+	; Return with $1A in A
+	LDA	#$1A
+	STA	cpu_a
+	JMP	cpu_start_with_ret
 .ENDPROC
 
+; --------------------------------------------------------
+; BIOS_SECTRN: Set selected track to zero
+;              Input:  -
+;              Output: -
+; --------------------------------------------------------
+
+.PROC	BIOS_HOME
+	LDA	#0
+	STA	disk_track
+	STA	disk_track+1
+	JMP	cpu_start_with_ret
+.ENDPROC
+
+; --------------------------------------------------------
+; BIOS_SELDSK: Select disk
+;              Input:  C = drive to select
+;              Output: HL = BIOS disk struct OR zero (error)
+; --------------------------------------------------------
+
+.PROC	BIOS_SELDSK
+	;BRA	error
+	LDA	cpu_c
+	BNE	error		; currently one drive is supported (drive zero) only, thus non-zero value is an error
+	LDA	#.LOBYTE(M65BIOS_DPH)
+	STA	cpu_l
+	LDA	#.HIBYTE(M65BIOS_DPH)
+	STA	cpu_h
+	JMP	cpu_start_with_ret
+error:
+	LDA	#0
+	STA	cpu_l
+	STA	cpu_h
+	JMP	cpu_start_with_ret
+.ENDPROC
+
+; --------------------------------------------------------
+; BIOS_SECTRN: Set track for disk I/O
+;              Input:  BC = select track number
+;              Output: -
+; --------------------------------------------------------
+
+.PROC	BIOS_SETTRK
+	LDA	cpu_c
+	STA	disk_track
+	LDA	cpu_b
+	STA	disk_track+1
+	JMP	cpu_start_with_ret
+.ENDPROC
+
+; --------------------------------------------------------
+; BIOS_SETSEC: Set sector for disk I/O
+;              Input:  BC = select sector number
+;              Output: -
+; --------------------------------------------------------
+
+.PROC	BIOS_SETSEC
+	LDA	cpu_c
+	STA	disk_sector
+	LDA	cpu_b
+	STA	disk_sector+1
+	JMP	cpu_start_with_ret
+.ENDPROC
+
+; --------------------------------------------------------
+; BIOS_SETDMA: Set CP/M DMA
+;              Input:  BC = address of DMA area to set
+;              Output: -
+; --------------------------------------------------------
+
+.PROC	BIOS_SETDMA
+	LDA	cpu_c
+	STA	cpm_dma
+	LDA	cpu_b
+	STA	cpm_dma+1
+	JMP	cpu_start_with_ret
+.ENDPROC
+
+; --------------------------------------------------------
+; BIOS_READ: Read sector from disk
+;            Input:  -
+;            Output: A = opresult: 0=OK, 1=ERROR
+; --------------------------------------------------------
 
 
-.PROC	bios_call
-	LDA	cpu_pcl
-	AND	#$3F
-	CMP	#bios_call_table_size
-	BCS	bios_unknown_big
-	ASL	A
-	TAX
-	JMP	(bios_call_table,X)
-	WRISTR	{13,10,"*** UNKNOWN BIOS call (too high): $"}
-bios_unknown_big:
-	LDA	cpu_pcl
-	AND	#$3F
+.PROC	BIOS_READ
+DEBUG_READ = 0
+.IF	DEBUG_READ = 1
+	WRISTR  {"[READ "}
+	LDA	disk_track+1
 	JSR	write_hex_byte
-	JSR	write_crlf
-	JMP	wboot
+	LDA	disk_track
+	JSR	write_hex_byte
+	LDA	#'/'
+	JSR	write_char
+	LDA	disk_sector+1
+	JSR	write_hex_byte
+	LDA	disk_sector
+	JSR	write_hex_byte
+	WRISTR	{"->"}
+.ENDIF
+	; TODO: now a fake stuff: just fill the DMA area with constant value and report OK
+	LDA	cpm_dma+1
+	STA	addr+1
+.IF	DEBUG_READ = 1
+	JSR	write_hex_byte
+.ENDIF
+	LDA	cpm_dma
+	STA	addr
+.IF	DEBUG_READ = 1
+	JSR	write_hex_byte
+	LDA	#']'
+	JSR	write_char
+.ENDIF
+	;BRA	error
+	STA	$D707					; trigger in-line DMA
+	.BYTE	$A,0					; --- first job --- enhanced mode opts
+	.BYTE	3					; DMA command: fill and not chained
+	.WORD	128					; DMA length: 128 for the CP/M sector size
+	.WORD	$E5E5					; source addr, in case of "fill" the low byte is the byte to fill with
+	.BYTE	0					; source bank + other info
+addr:	.WORD	0					; target addr
+	.BYTE	I8080_BANK				; target bank + other info
+	.WORD	0					; modulo: not used
+	LDA	#0		; no error (FIXME: this is bad, we must check track/sector)
+ret_with_result:
+	STA	cpu_a
+	JMP	cpu_start_with_ret
+error:
+	LDA	#1
+	BRA	ret_with_result
 .ENDPROC
-bios_call_show_and_halt = bios_call::bios_unknown_big
 
+; --------------------------------------------------------
+; BIOS_WRITE: Write sector to disk
+;             Input:  C = deblocking info
+;                         0 = normal sector write
+;                         1 = write to directory sector
+;                         2 = write to the first sector of a new data block
+;             Output: A = opresult: 0=OK, 1=ERROR
+; --------------------------------------------------------
+
+.PROC	BIOS_WRITE
+	; No write is supported currently
+	LDA	#1	; return error
+	STA	cpu_a
+	JMP	cpu_start_with_ret
+.ENDPROC
+
+.PROC	BIOS_PRSTAT
+	LDA	#0	; "not ready"
+	STA	cpu_a
+	JMP	cpu_start_with_ret
+.ENDPROC
+
+; --------------------------------------------------------
+; BIOS_SECTRN: Sector translation
+;              Input:  BC = sector number
+;              Output: HL = translated sector number
+; We give back BC, for 1:1 skew aka "no skew"
+; --------------------------------------------------------
+
+.PROC	BIOS_SECTRN
+	; HL := BC
+	LDA	cpu_b
+	STA	cpu_h
+	LDA	cpu_c
+	STA	cpu_l
+	JMP	cpu_start_with_ret
+.ENDPROC
+
+; ----------------------------------------------------------------------------
+; ----------------------------------------------------------------------------
+
+.IF	INSPECTOR_SHELL = 1
+	.IMPORT	command_processor
+.ELSE
+	command_processor:
+		RTS
+.ENDIF
 
 ; This is the "main function" jumped by the loader
 .EXPORT	app_main
 .PROC	app_main
-	JSR	init_console
+	JSR	init_console		; that will also set up IRQ and NMI
 	JSR	clear_screen		; the fist call of this initiailizes console out functions
-	WRISTR	{"i8080 emulator and (re-implemented) CP/M for MEGA65 (C)2017 LGB",13,10,"M65 OS/DOS versions are "}
+	WRISTR	{MEGA80_COPYRIGHT,13,10,"M65 OS/DOS versions are "}
 	LDA	#0
 	HYPERDOS
 	JSR	write_hex_byte
@@ -307,76 +477,8 @@ bios_call_show_and_halt = bios_call::bios_unknown_big
 	TZA
 	JSR	write_hex_byte
 	JSR	write_crlf
-	CLI				; beware, interrupts are enabled :-)
-boot:
-	;WRISTR	"@ Boot, before CPU reset. "
-	;JSR	press_a_key
 	JSR	cpu_reset
-	;WRISTR	"Before install software. "
-	;JSR	press_a_key
-	JSR	install_software	; initializes i8080 CP/M memory, and "uploads" the software there we want to run
-	LDA	#1
-	STA	cpu_pch			; reset address was 0, now with high byte modified to 1, it's 0x100, the start address of CP/M programs.
-	.IMPORT	command_processor
-	JSR	command_processor
-	WRISTR	{"Entering into i8080 mode",13,10,13,10}
-	JSR	press_a_key
-		.IMPORT	START_CPM
-		JMP	START_CPM
-	JMP	cpu_start
-.ENDPROC
-
-
-.PROC	press_a_key
-	PHA
-	PHP
-	WRISTR	{"Press 'c' to continue.",13,10}
-:	JSR	conin_check_status
-	BNE	:-
-:	JSR	conin_get_with_wait
-	CMP	#'c'
-	BNE	:-
-	PLP
-	PLA
-	RTS
-.ENDPROC
-
-
-.PROC	wboot
-	JSR	reg_dump
-;	WRISTR	"Press 'c' to continue: "
-;wait:
-;	JSR	conin_get_with_wait
-;	CMP	#'c'
-;	BNE	wait
-	JSR	write_crlf
-	JMP	app_main::boot
-.ENDPROC
-
-
-; i8080 emulator will jump here on "cpu_leave" event
-;.EXPORT	return_cpu_leave
-.PROC	return_cpu_leave
-	LDA	cpu_pch
-	CMP	#BIOSPAGE
-	LBEQ	bios_call
-	CMP	#BDOSPAGE
-	LBEQ	bdos_call
-	WRISTR	{13,10,"*** Emulation trap not on the BIOS or BDOS pages",13,10}
-	JMP	wboot
-.ENDPROC
-
-; i8080 emulator will jump here on "cpu_unimplemented" event
-.EXPORT	return_cpu_unimplemented
-.PROC	return_cpu_unimplemented
-	WRISTR	{13,10,"*** Unimplemented i8080 opcode",13,10}
-	JMP	wboot
-.ENDPROC
-
-.PROC	halt_not
-	JSR	reg_dump
-	WRISTR  {13,10,"HALTED.",13,10}
-halted:
-	INC	$84F
-	JMP	halted
+	CLI				; beware, interrupts are enabled :-)
+	JSR	command_processor	; call the inspector shell before starting - if enabled in config
+	JMP	BIOS_BOOT
 .ENDPROC

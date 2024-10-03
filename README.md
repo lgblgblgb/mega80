@@ -32,6 +32,6 @@ can be other problems as well.
 
 ### Standard UNIX stuff, like sed, make ...
 
-### Python
+### Python 3
 
 ### c1541

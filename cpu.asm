@@ -399,6 +399,7 @@ next_inc1:
 	INW	cpu_pc
 next_no_inc:
 .IF SERIAL_DEBUG = 1
+	.WARNING "Compiled with SERIAL_DEBUG! Emulation will be slow!"
 	; Used to debug execution via MEGA65's serial monitor (actually in Xemu ...)
 	LDA	cpu_pcl
 	MEGA65_WRITE_SERIAL

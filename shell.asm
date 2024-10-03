@@ -32,6 +32,8 @@
 .INCLUDE "console.inc"
 .INCLUDE "cpu.inc"
 
+.IF	INSPECTOR_SHELL = 1
+
 .BSS
 
 cli_buffer:	.RES	80
@@ -410,3 +412,5 @@ cmdnames:
 	.BYTE	"reg",'s'|128
 	.BYTE	"setp",'c'|128
 	.BYTE	0
+
+.ENDIF

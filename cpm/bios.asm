@@ -68,7 +68,7 @@ M65BIOS_DPH:
 	DW	0		; scratchpad
 	DW	disk_dirbuf	; system-wide, shared DIRBUF pointer
 	DW	dpb_table	; DPB (Disk Parameter Block) pointer
-	DW	0		; CSV pointer (optional, not implemented), used for software disk change detection
+	DW	chk		; CSV pointer (optional, not implemented), used for software disk change detection
 	DW	alv		; ALV pointer
 
 ; Disk Parameter Block (DPB)
@@ -90,12 +90,12 @@ dpb_table:
 NONBSS_SIZE = $ - BIOS_START_ADDRESS
 M65BIOS_NONBSS_SIZE = NONBSS_SIZE
 
-STACK_SIZE = 128
 
 disk_dirbuf:	DS	128
-alv:		DS	128
-stack:		DS	STACK_SIZE
-stack_top =	stack + STACK_SIZE
+alv:		DS	31
+chk:		DS	16
+stack:		DS	128
+stack_top =	$
 
 M65BIOS_STACK_TOP = stack_top
 

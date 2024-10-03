@@ -21,7 +21,7 @@ PRG		= emu.prg
 LD65_CFG	= emu.ld
 PRG_ON_DISK	= emu
 MAP_FILE	= emu.map
-SOURCES		= console.asm cpu.asm loader.asm main.asm shell.asm fontdata.asm cpm.asm
+SOURCES		= console.asm cpu.asm loader.asm main.asm shell.asm fontdata.asm
 INCLUDES	= $(shell ls *.inc) cpm/bios.inc cpm/cpm22.inc
 OBJECTS		= $(SOURCES:.asm=.o)
 M65_IP		= 192.168.0.65
@@ -30,7 +30,8 @@ ALL_DEPENDS	= Makefile
 CA65_OPTS	= -t none
 LD65_OPTS	= -C $(LD65_CFG) -m $(MAP_FILE) -vm
 
-XEMU_M65	= xemu-xmega65
+#XEMU_M65	= xemu-xmega65
+XEMU_M65	= /home/lgb/prog_here/xemu-dev/build/bin/xmega65.native
 
 ETHERLOAD	= mega65-etherload
 C1541		= c1541
