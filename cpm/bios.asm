@@ -57,6 +57,21 @@ halt_tab:
 
 ; ------------------------------------------------------------
 
+M65BIOS_GO_CPM:
+	LD	SP, stack_top			; Let's have some stack
+	LD	A, 0xC3
+	LD	(0), A				; "JP" opcode for BIOS functions
+	LD	(5), A				; "JP" opcode for BDOS functions
+	LD	HL, BIOS_START_ADDRESS + 3	; Set-up jump address for BIOS functions: pointing to WBOOT and *NOT* BOOT!
+	LD	(1), HL
+	LD	HL, M65BDOS_FBASE		; Set-up jump address for BDOS functions
+	LD	(6), HL
+	LD	A, 0x76				; HALT opcode at $FFFF -> special MEGA65 gw for future stuff
+	LD	(0xFFFF),A
+	JP	M65BDOS_CBASE			; Execute CCP (C register is needed to be initialized by the native BIOS before calling us here!)
+
+; ------------------------------------------------------------
+
 ; Terminology is taken from the "Offical CP/M Alteration guide"
 ; http://www.gaby.de/cpm/manuals/archive/cpm22htm/ch6.htm
 
@@ -82,7 +97,7 @@ dpb_table:
 	DB	192		; AL0: determine reserved directory blocks.
 	DB	0		; AL1: -- "" ---
 	DW	16		; CKS: size of the directory check vector.
-	DW	2		; OFF: number of reserved tracks at the beginning of the (logical) disk.
+	DW	0		; OFF: number of reserved tracks at the beginning of the (logical) disk.
 
 
 ; ------ ONLY UN'INIT'ED stuff can goes here from this point -----
@@ -97,7 +112,6 @@ chk:		DS	16
 stack:		DS	128
 stack_top =	$
 
-M65BIOS_STACK_TOP = stack_top
 
 BIOS_END_ADDRESS:
 
@@ -106,15 +120,6 @@ BIOS_END_ADDRESS:
 	ASSERT (BIOS_START_ADDRESS & 0xFF) = 0, BIOS is not aligned to 256 byte boundary.
 
 M65BIOS_START_BIOS = BIOS_START_ADDRESS
-;M65BIOS_END_BIOS = BIOS_END_ADDRESS
-;M65BIOS_SIZE_BIOS = BIOS_END_ADDRESS - BIOS_START_ADDRESS
 M65BIOS_HALT_TAB_LO = halt_tab & 0xFF
-;M65BIOS_MAX_DRIVES = MAX_DRIVES
-;M65BIOS_BUFFER_SPACE = BUFFERS_RESERVE
 M65BIOS_WASTED_PAGES = (0x10000 - BIOS_END_ADDRESS) >> 8
 M65BIOS_ALL_CALLS = ALL_CALLS
-
-;M65BIOS_STACK = BIOS_END_ADDRESS + STACK_SIZE
-;M65BIOS_DRIVE_STRUCTS = M65BIOS_STACK
-
-

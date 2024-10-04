@@ -27,7 +27,7 @@
 ; ----------------------------------------------------------------------------
 
 .DEFINE MEGA80_COPYRIGHT	"MEGA/80: i8080 emulator and CP/M BIOS for MEGA65 (C)2017,2024 LGB Gabor Lenart"
-.DEFINE BIOS_COPYRIGHT		"MEGA65 CBIOS for CPM v2.2 (C)2017,2024 LGB Gabor Lenart"
+.DEFINE BIOS_COPYRIGHT		"MEGA65 CBIOS for CP/M v2.2 (C)2017,2024 LGB Gabor Lenart"
 
 .INCLUDE "mega65.inc"
 .INCLUDE "emu.inc"
@@ -35,6 +35,7 @@
 .INCLUDE "cpu.inc"
 .INCLUDE "cpm/cpm22.inc"
 .INCLUDE "cpm/bios.inc"
+.INCLUDE "disk.inc"
 
 
 .SEGMENT "PAYLOAD"
@@ -44,13 +45,6 @@
 bdos_image:	.INCBIN	"cpm/cpm22.bin"
 bios_image:	.INCBIN "cpm/bios.bin",0,M65BIOS_NONBSS_SIZE
 
-
-.ZEROPAGE
-
-cpm_dma:	.RES 2
-cpm_zp_ptr32:	.RES 4
-disk_sector:	.RES 2
-disk_track:	.RES 2
 
 .CODE
 
@@ -108,44 +102,16 @@ disk_track:	.RES 2
 ; *** Common part of BOOT and WBOOT
 
 .PROC	go_cpm
-	LDA	#$C3		; "JP" opcode
-	LDZ	#0
-	STA32Z  cpm_zp_ptr32		; @0
-	INZ
-	LDA	#.LOBYTE(M65BIOS_START_BIOS + 3)
-	STA32Z	cpm_zp_ptr32		; @1
-	INZ
-	LDA	#.HIBYTE(M65BIOS_START_BIOS + 3)
-	STA32Z	cpm_zp_ptr32		; @2
-
-	LDA	#$C3		; "JP" opcode - again
-	LDZ	#5
-	STA32Z	cpm_zp_ptr32		; @5
-	INZ
-	LDA	#.LOBYTE(M65BDOS_FBASE)
-	STA32Z	cpm_zp_ptr32		; @6
-	INZ
-	LDA	#.HIBYTE(M65BDOS_FBASE)
-	STA32Z	cpm_zp_ptr32		; @7
-
 	LDA	#$80
 	STA	cpm_dma
 	LDA	#$00
 	STA	cpm_dma+1
 	STA	cpu_c			; C=0 -> drive number [with multiple drives it won't preserve current drive this way!]
-
-
-	; Set up stack
-	LDA	#.LOBYTE(M65BIOS_STACK_TOP)
-	STA	cpu_spl
-	LDA	#.HIBYTE(M65BIOS_STACK_TOP)
-	STA	cpu_sph
-	; Set PC to M65BDOS_CBASE (label CBASE in CPM22.ASM = entry point of CCP)
-	LDA	#.LOBYTE(M65BDOS_CBASE)
+	; Routine M65BIOS_GO_CPM will set up the BIOS and BDOS "JP" opcodes on CP/M zero page and execute CBASE (CCP)
+	LDA	#.LOBYTE(M65BIOS_GO_CPM)
 	STA	cpu_pcl
-	LDA	#.HIBYTE(M65BDOS_CBASE)
+	LDA	#.HIBYTE(M65BIOS_GO_CPM)
 	STA	cpu_pch
-	; ----
 	RTS
 .ENDPROC
 
@@ -155,7 +121,7 @@ disk_track:	.RES 2
 
 .PROC	BIOS_BOOT
 	; Fancy printouts
-	WRISTR	{CPU_EMU_COPYRIGHT,13,10,BIOS_COPYRIGHT,13,10,"CP/M: "}
+	WRISTR	{CPU_EMU_COPYRIGHT,13,10,BIOS_COPYRIGHT,13,10,"CCP and BDOS "}
 	LDX	#0
 :	LDA	bdos_image+8,X		; DR's copyright message inside the BDOS: let's print that out as well!
 	BEQ	:+
@@ -181,28 +147,18 @@ disk_track:	.RES 2
 	.WORD	M65BDOS_START_BDOS			; target addr
 	.BYTE	I8080_BANK				; target bank + other info
 	.WORD	0					; modulo: not used
-	LDZ	#0
-	; Set up CP/M zero-page 32 bit pointer (not to be confused with 65xx zero page ...)
-	STZ	cpm_zp_ptr32
-	STZ	cpm_zp_ptr32+1
-	STZ	cpm_zp_ptr32+3
-	LDA	#I8080_BANK
-	STA	cpm_zp_ptr32+2
 	; To have some default anyway
+	LDZ	#0
 	STZ	disk_sector
 	STZ	disk_sector+1
 	STZ	disk_track
 	STZ	disk_track+1
-
-
-
-
-
-
-;	:	INC	$D020
-;		JMP	:-
+	;
 	JSR	go_cpm
-	WRISTR	{"Enter via BOOT",13,10}
+	JSR	write_inline_string
+		.BYTE	"MEM:"
+		.INCLUDE "cpm/info.inc"
+		.BYTE	13,10,0
 	JMP	cpu_start
 .ENDPROC
 
@@ -224,7 +180,6 @@ disk_track:	.RES 2
 	.BYTE	I8080_BANK				; target bank + other info
 	.WORD	0					; modulo: not used
 	JSR	go_cpm
-	WRISTR	{"Enter via WBOOT",13,10}
 	JMP	cpu_start
 .ENDPROC
 
@@ -362,53 +317,10 @@ error:
 ;            Output: A = opresult: 0=OK, 1=ERROR
 ; --------------------------------------------------------
 
-
 .PROC	BIOS_READ
-DEBUG_READ = 0
-.IF	DEBUG_READ = 1
-	WRISTR  {"[READ "}
-	LDA	disk_track+1
-	JSR	write_hex_byte
-	LDA	disk_track
-	JSR	write_hex_byte
-	LDA	#'/'
-	JSR	write_char
-	LDA	disk_sector+1
-	JSR	write_hex_byte
-	LDA	disk_sector
-	JSR	write_hex_byte
-	WRISTR	{"->"}
-.ENDIF
-	; TODO: now a fake stuff: just fill the DMA area with constant value and report OK
-	LDA	cpm_dma+1
-	STA	addr+1
-.IF	DEBUG_READ = 1
-	JSR	write_hex_byte
-.ENDIF
-	LDA	cpm_dma
-	STA	addr
-.IF	DEBUG_READ = 1
-	JSR	write_hex_byte
-	LDA	#']'
-	JSR	write_char
-.ENDIF
-	;BRA	error
-	STA	$D707					; trigger in-line DMA
-	.BYTE	$A,0					; --- first job --- enhanced mode opts
-	.BYTE	3					; DMA command: fill and not chained
-	.WORD	128					; DMA length: 128 for the CP/M sector size
-	.WORD	$E5E5					; source addr, in case of "fill" the low byte is the byte to fill with
-	.BYTE	0					; source bank + other info
-addr:	.WORD	0					; target addr
-	.BYTE	I8080_BANK				; target bank + other info
-	.WORD	0					; modulo: not used
-	LDA	#0		; no error (FIXME: this is bad, we must check track/sector)
-ret_with_result:
+	JSR	disk_read
 	STA	cpu_a
 	JMP	cpu_start_with_ret
-error:
-	LDA	#1
-	BRA	ret_with_result
 .ENDPROC
 
 ; --------------------------------------------------------
@@ -421,8 +333,7 @@ error:
 ; --------------------------------------------------------
 
 .PROC	BIOS_WRITE
-	; No write is supported currently
-	LDA	#1	; return error
+	JSR	disk_write
 	STA	cpu_a
 	JMP	cpu_start_with_ret
 .ENDPROC
@@ -462,6 +373,8 @@ error:
 ; This is the "main function" jumped by the loader
 .EXPORT	app_main
 .PROC	app_main
+	LDA	#5			; All RAM but I/O
+	STA	1
 	JSR	init_console		; that will also set up IRQ and NMI
 	JSR	clear_screen		; the fist call of this initiailizes console out functions
 	WRISTR	{MEGA80_COPYRIGHT,13,10,"M65 OS/DOS versions are "}

@@ -9,3 +9,5 @@
 /uart.sock
 /dump.mem
 /serial.raw
+/runme.bin
+/cpm.dsk

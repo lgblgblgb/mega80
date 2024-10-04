@@ -1,0 +1,11 @@
+diskdef mega65
+  seclen 128
+  tracks 16
+  sectrk 256
+  blocksize 2048
+  maxdir 256
+  skew 1
+  boottrk 0
+  os 2.2
+end
+

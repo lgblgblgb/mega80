@@ -21,7 +21,7 @@ PRG		= emu.prg
 LD65_CFG	= emu.ld
 PRG_ON_DISK	= emu
 MAP_FILE	= emu.map
-SOURCES		= console.asm cpu.asm loader.asm main.asm shell.asm fontdata.asm
+SOURCES		= console.asm cpu.asm loader.asm main.asm shell.asm fontdata.asm disk.asm
 INCLUDES	= $(shell ls *.inc) cpm/bios.inc cpm/cpm22.inc
 OBJECTS		= $(SOURCES:.asm=.o)
 M65_IP		= 192.168.0.65
@@ -63,18 +63,27 @@ main.o: 8080/*.com 8080/mbasic-real.com
 $(PRG): $(OBJECTS) $(LD65_CFG) $(ALL_DEPENDS)
 	$(LD65) $(LD65_OPTS) -o $@ $(OBJECTS)
 
-$(DISK_IMAGE): $(PRG) $(ALL_DEPENDS)
+cpm.dsk: diskdefs Makefile
+	rm -f $@
+	mkfs.cpm -f mega65 $@
+	cpmcp -f mega65 $@ 8080/mbasic-real.com 0:mbasic.com
+	cpmls -f mega65 -D $@
+
+runme.bin: runme.asm
+	cl65 -t none -o $@ $<
+
+$(DISK_IMAGE): $(PRG) runme.bin cpm.dsk $(ALL_DEPENDS)
 	$(RM) -f $@
-	echo "format lgb-test,00 d81 $@\nwrite $(PRG) $(PRG_ON_DISK)" | $(C1541)
+	echo "format lgb-test,00 d81 $@\nwrite runme.bin runme\nwrite $(PRG) $(PRG_ON_DISK)\nwrite cpm.dsk\ndir\n" | $(C1541)
 
 ethertest: $(PRG) $(ALL_DEPENDS)
 	$(ETHERLOAD) $(M65_IP) $(PRG)
 
-xemu:	$(PRG)
-	$(XEMU_M65) -hyperserialfile serial.raw -fastboot -prg $(PRG)
+xemu:	$(PRG) $(DISK_IMAGE)
+	$(XEMU_M65) -hyperserialfile serial.raw -fastboot -8 $(DISK_IMAGE) -initattic cpm.dsk -prg $(PRG)
 
 clean:
-	$(RM) -f $(PRG) *.o *.lst $(DISK_IMAGE) $(MAP_FILE)
+	$(RM) -f $(PRG) *.o *.lst $(DISK_IMAGE) $(MAP_FILE) runme.bin cpm.dsk
 	$(MAKE) -C cpm clean
 
 distclean:

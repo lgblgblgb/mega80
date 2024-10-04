@@ -35,3 +35,8 @@ can be other problems as well.
 ### Python 3
 
 ### c1541
+
+### cpmtools
+
+### wget
+

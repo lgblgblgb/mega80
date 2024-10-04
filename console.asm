@@ -291,7 +291,6 @@ screen_line_tab_hi:
 	; Turn hot-register off
 	LDA	#$80
 	TRB	$D05D
-
 	; Setup or own character set included
 	.IMPORT	font_data
 	LDA	#.LOBYTE(font_data)
@@ -300,49 +299,6 @@ screen_line_tab_hi:
 	STA	$D069
 	LDA	#0
 	STA	$D06A
-
-
-
-	; Turn C64 charset at $D000 for starting point of modification
-	LDA	#1
-	STA	1
-	; We use charset "WOM" @ $0FF7 Exxx of M65 directly via linear addressing
-	; to submit new charset based on "sliced" original one from C64 ROM
-	; Since WOM is "write-only" memory, we need a source, that is C64 charset ROM.
-	LDA	#$F7
-	STA	umem_p1+2
-	LDA	#$0F
-	STA	umem_p1+3
-	LDZ	#0
-	LDX	#0
-	STZ	umem_p1
-cp0:
-	; ***
-	LDY	#$E8		; we use the SECOND 2K of CHR-WOM! So in case of reset, M65 will not display garbage, as it uses the first charset (uppercase+gfx)
-	STY	umem_p1+1
-	LDA	#$FF
-	STA32Z	umem_p1		; well, that's only for making sure chars 0-31 are "blank" to catch problems, etc?
-	; ***
-	INY
-	STY	umem_p1+1
-	LDA	$D000+32*8,X
-	STA32Z	umem_p1
-	; ***
-	INY
-	STY	umem_p1+1
-	LDA	$D000,X
-	STA32Z	umem_p1
-	; ***
-	INY
-	STY	umem_p1+1
-	LDA	$D800,X
-	STA32Z	umem_p1
-	INX
-	INZ
-	BNE	cp0
-	; All RAM, but I/O?
-	LDA	#5
-	STA	1
 	; Set interrupt handler
 	LDA	#<irq_handler
 	STA	$FFFE
