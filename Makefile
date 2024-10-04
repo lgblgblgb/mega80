@@ -30,8 +30,8 @@ ALL_DEPENDS	= Makefile
 CA65_OPTS	= -t none
 LD65_OPTS	= -C $(LD65_CFG) -m $(MAP_FILE) -vm
 
-#XEMU_M65	= xemu-xmega65
-XEMU_M65	= /home/lgb/prog_here/xemu-dev/build/bin/xmega65.native
+XEMU_M65	= xemu-xmega65
+#XEMU_M65	= /home/lgb/prog_here/xemu-dev/build/bin/xmega65.native
 
 ETHERLOAD	= mega65-etherload
 C1541		= c1541
@@ -66,7 +66,7 @@ $(PRG): $(OBJECTS) $(LD65_CFG) $(ALL_DEPENDS)
 cpm.dsk: diskdefs Makefile
 	rm -f $@
 	mkfs.cpm -f mega65 $@
-	cpmcp -f mega65 $@ 8080/mbasic-real.com 0:mbasic.com
+	cpmcp -f mega65 $@ dist/cpm-apps/* 0:
 	cpmls -f mega65 -D $@
 
 runme.bin: runme.asm

@@ -53,7 +53,7 @@ disk_track:	.RES 2
 
 .EXPORT	disk_read
 .PROC	disk_read
-DEBUG_READ = 1
+DEBUG_READ = 0
 .IF	DEBUG_READ = 1
 	WRISTR  {"[READ "}
 	LDA	disk_track+1
