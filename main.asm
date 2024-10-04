@@ -55,8 +55,6 @@ bios_image:	.INCBIN "cpm/bios.bin",0,M65BIOS_NONBSS_SIZE
 	JSR	reg_dump
 	; TODO: add "press a key" and option to boot instead of wboot
 	WRISTR  {"WBOOT on fatal error",13,10}
-:	INC	$D020
-	JMP	:-
 	JMP	BIOS_WBOOT
 .ENDPROC
 
@@ -71,6 +69,10 @@ bios_image:	.INCBIN "cpm/bios.bin",0,M65BIOS_NONBSS_SIZE
 ; Input: depends on the PC value of the i8080 emulator only!
 .EXPORT	return_cpu_leave
 .PROC	return_cpu_leave
+	LDA	cpu_pch
+	AND	cpu_pcl
+	CMP	#$FF
+	BEQ	@mega65_special
 	LDA	cpu_pch
 	CMP	#.HIBYTE(M65BIOS_START_BIOS)
 	BNE	@not_halt_tab
@@ -90,6 +92,9 @@ bios_image:	.INCBIN "cpm/bios.bin",0,M65BIOS_NONBSS_SIZE
 	WRISTR	{13,10,"*** Invalid BIOS call #$"}
 	PLA
 	JSR	write_hex_byte
+	JMP	fatal_error
+@mega65_special:
+	WRISTR	{13,10,"*** MEGA65 special gw is not ready yet"}
 	JMP	fatal_error
 @bios_call_table:
 	.WORD	BIOS_BOOT,   BIOS_WBOOT,  BIOS_CONST,  BIOS_CONIN

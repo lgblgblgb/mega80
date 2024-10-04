@@ -88,13 +88,13 @@ M65BIOS_DPH:
 
 ; Disk Parameter Block (DPB)
 dpb_table:
-	DW	26		; SPT: total number of sectors per track
-	DB	3		; BSH: data allocation block shift factor, determined by the data block allocation size.
-	DB	7		; BLM: data allocation block mask (2[BSH-1]).
+	DW	256		; SPT: total number of sectors per track
+	DB	4		; BSH: data allocation block shift factor, determined by the data block allocation size.
+	DB	15		; BLM: data allocation block mask (2[BSH-1]).
 	DB	0		; EXM: extent mask, determined by the data block allocation size and the number of disk blocks.
-	DW	242		; DSM: total storage capacity of the disk drive (max allocation block number)
-	DW	63		; DRM: total number of directory entries that can be stored on this drive.
-	DB	192		; AL0: determine reserved directory blocks.
+	DW	2420		; DSM: total storage capacity of the disk drive (max allocation block number)
+	DW	256		; DRM: total number of directory entries that can be stored on this drive.
+	DB	0		; AL0: determine reserved directory blocks.
 	DB	0		; AL1: -- "" ---
 	DW	16		; CKS: size of the directory check vector.
 	DW	0		; OFF: number of reserved tracks at the beginning of the (logical) disk.
