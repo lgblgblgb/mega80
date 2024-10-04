@@ -37,7 +37,6 @@ ETHERLOAD	= mega65-etherload
 C1541		= c1541
 CA65		= ca65
 LD65		= ld65
-WGET		= wget
 RM		= rm
 GUNZIP		= gunzip
 
@@ -53,10 +52,6 @@ cpm/bios.inc cpm/cpm22.inc cpm/bios.bin cpm/cpm22.bin:
 
 %.o: %.asm $(ALL_DEPENDS) $(INCLUDES)
 	$(CA65) $(CA65_OPTS) --listing $(<:.asm=.lst) -o $@ $<
-
-8080/mbasic-real.com:
-	mkdir -p 8080
-	$(WGET) -O $@ http://github.lgb.hu/xemu/files/mbasic-real.com
 
 main.o: 8080/*.com 8080/mbasic-real.com
 
@@ -82,6 +77,9 @@ ethertest: $(PRG) $(ALL_DEPENDS)
 xemu:	$(PRG) $(DISK_IMAGE)
 	$(XEMU_M65) -hyperserialfile serial.raw -fastboot -8 $(DISK_IMAGE) -initattic cpm.dsk -prg $(PRG)
 
+dist:	$(DISK_IMAGE)
+	cp emu.d81 dist/bin/mega65.d81
+
 clean:
 	$(RM) -f $(PRG) *.o *.lst $(DISK_IMAGE) $(MAP_FILE) runme.bin cpm.dsk
 	$(MAKE) -C cpm clean
@@ -90,4 +88,4 @@ distclean:
 	$(MAKE) clean
 	$(RM) -f 8080/*.com uart.sock dump.mem serial.raw
 
-.PHONY: all clean distclean xemu ethertest
+.PHONY: all clean distclean xemu ethertest dist

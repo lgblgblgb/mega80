@@ -12,6 +12,10 @@ For now, i8080 CPU (which is the original CPU for CP/M, not the Z80) is emulated
 A custom CP/M v2.2 is provided dispatching the work to the native 65xx implementation
 via HALT opcodes. For now, original DR's CPM (BDOS and CCP) v2.2 is used.
 
+## Download
+
+Have a look in directory `dist/bin` for a D81 disk image file (`mega65.d81`) for MEGA65.
+
 ## Limitations / problems / plans
 
 * Current code base is chaotic since major parts of it was written by me in 2017 and I only
@@ -27,6 +31,8 @@ via HALT opcodes. For now, original DR's CPM (BDOS and CCP) v2.2 is used.
     * Commodore 64 with SuperCPU
     * Commander X16 **if** CPU is 65816 and it can access RAM in higher bankes freely
     * Apple IIgs? Unfortunately I don't know too much about Apple computers, but could be a fun ...
+* Porting for non-65xx CPU based platforms: certainly it's not impossible but then you need to rewrite everything,
+  as it's an assembly project.
 * Integrated on-the-fly memory monitor and things like that
 * No, I don't plan CP/M v3. The problem: it requires extensive bank switching and other difficulties,
   since I'm emulating i8080 (later hopefully a Z80) emulating bank switching would be impossible or very slow
