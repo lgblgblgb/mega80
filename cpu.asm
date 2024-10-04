@@ -398,6 +398,14 @@ next_inc2:
 next_inc1:
 	INW	cpu_pc
 next_no_inc:
+.IF SERIAL_DEBUG = 1
+	.WARNING "Compiled with SERIAL_DEBUG! Emulation will be slow!"
+	; Used to debug execution via MEGA65's serial monitor (actually in Xemu ...)
+	LDA	cpu_pcl
+	MEGA65_WRITE_SERIAL
+	LDA	cpu_pch
+	MEGA65_WRITE_SERIAL
+.ENDIF
 	LDA32Z	cpu_pc				; fetch opcode byte
 	ASL	A				; multiply by two, since word based table. Old 7th bit is the carry flag now
 	TAX					; prepare for the JMP (nnnn,X) opcode

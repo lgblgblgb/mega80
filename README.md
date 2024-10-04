@@ -1,5 +1,68 @@
-# TODO
+# MEGA/80: i8080 emulator and CPM BIOS for MEGA65
 
-Trying to renew my old project from 2017 to be able to run CP/M on MEGA65
-with i8080 (for now, later: Z80) emulated in software.
+I'm trying to renew my old project from 2017 to be able to run CP/M on MEGA65
+with i8080 (for now, later: Z80) emulated in software equipped with a custom
+CBIOS for the task. The 65816 CPU also seems to be a possible target to port
+future Z80 emulation (I wouldn't do for the current i8080 since I will rewrite
+the emulator anyway).
+
+## Running CP/M
+
+For now, i8080 CPU (which is the original CPU for CP/M, not the Z80) is emulated.
+A custom CP/M v2.2 is provided dispatching the work to the native 65xx implementation
+via HALT opcodes. For now, original DR's CPM (BDOS and CCP) v2.2 is used.
+
+## Download
+
+Have a look in directory `dist/bin` for a D81 disk image file (`mega65.d81`) for MEGA65.
+
+## Limitations / problems / plans
+
+* Current code base is chaotic since major parts of it was written by me in 2017 and I only
+  try to revive some unfinished old work of mine here
+* So far only i8080 emulation, not Z80: newer CP/M programs written for Z80 won't work
+* Even i8080 is not emulated perfectly, no half-carry flag and no DAA and for sure can be many bugs
+* Original DR BDOS and CCP. There are open souce GNU/GPL replacements but requires Z80
+* In nutshell, I would guess I'll go for Z80 emulation later and don't plan to fix i8080 emulation bugs too much
+* No real disk access, CP/M disk image is copied to MEGA65 Attic RAM on startup and all changes later will be lost
+* Only "dumb" terminal emulation, `CR`, `LF` and `BS` is interpreted. For more advanced CP/M programs, some terminal emulation should be done
+* Need some tool which at least makes possible to easily import files into CP/M from MEGA65 SD card or such (at runtime)
+* Porting to other systems: 65816 CPU seems to be a viable option for porting, and machines using that CPU and having enough memory:
+    * Commodore 64 with SuperCPU
+    * Commander X16 **if** CPU is 65816 and it can access RAM in higher bankes freely
+    * Apple IIgs? Unfortunately I don't know too much about Apple computers, but could be a fun ...
+* Porting for non-65xx CPU based platforms: certainly it's not impossible but then you need to rewrite everything,
+  as it's an assembly project.
+* Integrated on-the-fly memory monitor and things like that
+* No, I don't plan CP/M v3. The problem: it requires extensive bank switching and other difficulties,
+  since I'm emulating i8080 (later hopefully a Z80) emulating bank switching would be impossible or very slow
+
+## Building
+
+Tools needed to build:
+
+### CC65
+
+Various tools (ca65, ld65, cl65) from the CC65 suite to assemble 65xx assembly sources:
+
+Only tested with V2.18 (as of I am writing this), so any older version can cause
+problems. Currently the C compiler part (cc65) is not used though.
+
+### SjASMPlus
+
+SjASMPlus Z80 Cross-Assembler to assemble i8080 / Z80 assembly sources: https://github.com/z00m128/sjasmplus
+
+Only tested with version v1.20.3 (as of I am writing this), so any older version
+can cause problems, like certain ASSERT features was introduced in v1.18.1 but there
+can be other problems as well.
+
+### Standard UNIX stuff, like sed, make ...
+
+### Python 3
+
+### c1541
+
+### cpmtools
+
+### wget
 

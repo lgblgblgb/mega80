@@ -1,0 +1,13 @@
+/*.o
+/*.map
+/*.sym
+/*.pyc
+/*.pyo
+/*.d81
+/*.prg
+/*.lst
+/uart.sock
+/dump.mem
+/serial.raw
+/runme.bin
+/cpm.dsk

@@ -1,0 +1,27 @@
+.WORD	$2001
+.ORG	$2001
+
+line10:
+	.WORD	line20
+	.WORD	10
+	.BYTE	$99	; PRINT token
+	.BYTE	$22,"LOADING CP/M DISK TO ATTIC RAM, PLEASE WAIT ...",$22
+	.BYTE	" : "
+	.BYTE	$FE,$11	; BLOAD token
+	.BYTE	$22,"CPM.DSK",$22,",P($8000000),R"
+	.BYTE	0
+
+line20:
+	.WORD	line30
+	.WORD	20
+	.BYTE	$99	; PRINT token
+	.BYTE	$22,"LOADING MEGA/80, PLEASE WAIT ...",$22
+	.BYTE	" : "
+	.BYTE	$8A	; RUN token
+	.BYTE	$22,"EMU",$22
+	.BYTE	0
+
+line30:
+	.WORD	0
+	.BYTE	0
+
