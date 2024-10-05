@@ -54,6 +54,14 @@ ring_the_bell:		.RES 1
 ; and speed sensitive part (i8080 emulation). So there is huge amount room here for more sane
 ; and optimized solution!
 
+
+; Purpose: reset console state, for future escape sequences and like that
+.EXPORT	console_state_reset
+.PROC	console_state_reset
+	RTS
+.ENDPROC
+
+
 ; Currently we don't handle colours etc anything, but full colour RAM anyway with a consistent colour
 .EXPORT	clear_screen
 .PROC	clear_screen
@@ -413,6 +421,18 @@ sprite_shaper2:
 	PHY
 	PHZ
 
+	; Test for BRK
+	TSX
+	LDA	$105,X
+	AND	#$10
+	BEQ	notbrk
+
+
+	INC	$D020
+
+	;JMP	eoi
+
+notbrk:
 	; --- KEYBOARD scanning with $D610 ---
 	LDA	key_queued
 	BNE	@already_has		; avoid scanning, if there is already a character extracted to kbd_queued
@@ -540,11 +560,13 @@ sprite_shaper2:
 
 
 
+	ASL	$D019	; acknowledge VIC interrupt (note: it wouldn't work on a real C65 as RMW opcodes are different but it does work on M65 as on C64 too!)
+
+eoi:
 	PLZ
 	PLY
 	PLX
 	PLA
-	ASL	$D019	; acknowledge VIC interrupt (note: it wouldn't work on a real C65 as RMW opcodes are different but it does work on M65 as on C64 too!)
 	RTI
 
 hextab:

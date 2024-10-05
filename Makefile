@@ -47,19 +47,23 @@ cpu_tables.inc: cpu_gen_tables.py
 	rm -f cpu_tables.inc
 	./cpu_gen_tables.py > $@
 
+apps/*.com:
+	$(MAKE) -C apps
+
 cpm/bios.inc cpm/cpm22.inc cpm/bios.bin cpm/cpm22.bin:
 	$(MAKE) -C cpm
 
 %.o: %.asm $(ALL_DEPENDS) $(INCLUDES)
 	$(CA65) $(CA65_OPTS) --listing $(<:.asm=.lst) -o $@ $<
 
-main.o: 8080/*.com 8080/mbasic-real.com
-
 $(PRG): $(OBJECTS) $(LD65_CFG) $(ALL_DEPENDS)
-	$(LD65) $(LD65_OPTS) -o $@ $(OBJECTS)
+	@echo "Linking ..."
+	echo ".BYTE \"MEGA/80 built on `uname -s` by `whoami`@`uname -n` at `date`\"" > buildinfo_inc.asm
+	$(CA65) $(CA65_OPTS) -o buildinfo.o buildinfo.asm
+	$(LD65) $(LD65_OPTS) -o $@ $(OBJECTS) buildinfo.o
 
 cpm.dsk: diskdefs apps/*.com $(ALL_DEPENDS)
-	$(MAKE) -C apps/
+	$(MAKE) -C apps
 	rm -f $@
 	mkfs.cpm -f mega65 $@
 	cpmcp -f mega65 $@ dist/cpm-apps/* 0:
@@ -83,12 +87,12 @@ dist:	$(DISK_IMAGE)
 	cp emu.d81 dist/bin/mega65.d81
 
 clean:
-	$(RM) -f $(PRG) *.o *.lst $(DISK_IMAGE) $(MAP_FILE) runme.bin cpm.dsk
+	$(RM) -f $(PRG) *.o *.lst $(DISK_IMAGE) $(MAP_FILE) runme.bin cpm.dsk buildinfo_inc.asm
 	$(MAKE) -C cpm clean
 	$(MAKE) -C apps clean
 
 distclean:
 	$(MAKE) clean
-	$(RM) -f 8080/*.com uart.sock dump.mem serial.raw
+	$(RM) -f uart.sock dump.mem serial.raw
 
 .PHONY: all clean distclean xemu ethertest dist

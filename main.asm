@@ -112,8 +112,11 @@ bios_call_table:
 .PROC	go_cpm
 	LDA	#$80
 	STA	cpm_dma
+	LDA	#I8080_BANK
+	STA	cpm_dma+2
 	LDA	#$00
 	STA	cpm_dma+1
+	STA	cpm_dma+3
 	STA	cpu_c			; C=0 -> drive number [with multiple drives it won't preserve current drive this way!]
 	; Routine M65BIOS_GO_CPM will set up the BIOS and BDOS "JP" opcodes on CP/M zero page and execute CBASE (CCP)
 	LDA	#.LOBYTE(M65BIOS_GO_CPM)
@@ -128,7 +131,16 @@ bios_call_table:
 ; --------------------------------------------------------
 
 .PROC	BIOS_BOOT
+	JSR	console_state_reset
 	; Fancy printouts
+	.IMPORT	build_info_str
+	LDX	#0
+:	LDA	build_info_str,X
+	BEQ	:+
+	JSR	write_char
+	INX
+	BNE	:-
+:	JSR	write_crlf
 	WRISTR	{CPU_EMU_COPYRIGHT,13,10,BIOS_COPYRIGHT,13,10,"CCP and BDOS "}
 	LDX	#0
 :	LDA	bdos_image+8,X		; DR's copyright message inside the BDOS: let's print that out as well!
@@ -177,6 +189,7 @@ bios_call_table:
 ; --------------------------------------------------------
 
 .PROC	BIOS_WBOOT
+	JSR	console_state_reset
 	; Copy BDOS/CCP only (not the BIOS itself!)
 	STA	$D707					; trigger in-line DMA
 	.BYTE	$A,0					; --- second job --- enhanced mode opts

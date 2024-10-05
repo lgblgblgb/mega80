@@ -41,6 +41,7 @@
 .IMPORT		reg_dump
 .IMPORT		conin_check_status
 .IMPORT		conin_get_with_wait
+.IMPORT		console_state_reset
 
 
 .MACRO	WRISTR	str
