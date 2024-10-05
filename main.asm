@@ -72,31 +72,34 @@ bios_image:	.INCBIN "cpm/bios.bin",0,M65BIOS_NONBSS_SIZE
 	LDA	cpu_pch
 	AND	cpu_pcl
 	CMP	#$FF
-	BEQ	@mega65_special
+	BEQ	mega65_special
 	LDA	cpu_pch
 	CMP	#.HIBYTE(M65BIOS_START_BIOS)
-	BNE	@not_halt_tab
+	BNE	not_halt_tab
 	LDA	cpu_pcl
 	SEC
 	SBC	#M65BIOS_HALT_TAB_LO
 	CMP	#M65BIOS_ALL_CALLS
-	BCS	@bad_halt_ofs
+	BCS	bad_halt_ofs
 	ASL	A
 	TAX
-	JMP	(@bios_call_table,X)
-@not_halt_tab:
+	JMP	(bios_call_table,X)
+not_halt_tab:
 	WRISTR	{13,10,"*** Emu trap not on BIOS gw page / unexpected HALT opcode"}
 	JMP	fatal_error
-@bad_halt_ofs:
+bad_halt_ofs:
 	PHA
 	WRISTR	{13,10,"*** Invalid BIOS call #$"}
 	PLA
 	JSR	write_hex_byte
 	JMP	fatal_error
-@mega65_special:
-	WRISTR	{13,10,"*** MEGA65 special gw is not ready yet"}
+mega65_special:
+	.IMPORT	megagw
+	JSR	megagw
+	LBCC	cpu_start_with_ret
+	WRISTR	{13,10,"*** Invalid MEGA-GW call"}
 	JMP	fatal_error
-@bios_call_table:
+bios_call_table:
 	.WORD	BIOS_BOOT,   BIOS_WBOOT,  BIOS_CONST,  BIOS_CONIN
 	.WORD	BIOS_CONOUT, BIOS_LIST,   BIOS_PUNCH,  BIOS_READER
 	.WORD	BIOS_HOME,   BIOS_SELDSK, BIOS_SETTRK, BIOS_SETSEC
@@ -259,7 +262,6 @@ bios_image:	.INCBIN "cpm/bios.bin",0,M65BIOS_NONBSS_SIZE
 ; --------------------------------------------------------
 
 .PROC	BIOS_SELDSK
-	;BRA	error
 	LDA	cpu_c
 	BNE	error		; currently one drive is supported (drive zero) only, thus non-zero value is an error
 	LDA	#.LOBYTE(M65BIOS_DPH)

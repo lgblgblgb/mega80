@@ -21,7 +21,7 @@ PRG		= emu.prg
 LD65_CFG	= emu.ld
 PRG_ON_DISK	= emu
 MAP_FILE	= emu.map
-SOURCES		= console.asm cpu.asm loader.asm main.asm shell.asm fontdata.asm disk.asm
+SOURCES		= console.asm cpu.asm loader.asm main.asm shell.asm fontdata.asm disk.asm megagw.asm
 INCLUDES	= $(shell ls *.inc) cpm/bios.inc cpm/cpm22.inc
 OBJECTS		= $(SOURCES:.asm=.o)
 M65_IP		= 192.168.0.65
@@ -58,10 +58,12 @@ main.o: 8080/*.com 8080/mbasic-real.com
 $(PRG): $(OBJECTS) $(LD65_CFG) $(ALL_DEPENDS)
 	$(LD65) $(LD65_OPTS) -o $@ $(OBJECTS)
 
-cpm.dsk: diskdefs Makefile
+cpm.dsk: diskdefs apps/*.com $(ALL_DEPENDS)
+	$(MAKE) -C apps/
 	rm -f $@
 	mkfs.cpm -f mega65 $@
 	cpmcp -f mega65 $@ dist/cpm-apps/* 0:
+	cpmcp -f mega65 $@ apps/*.com 0:
 	cpmls -f mega65 -D $@
 
 runme.bin: runme.asm
@@ -83,6 +85,7 @@ dist:	$(DISK_IMAGE)
 clean:
 	$(RM) -f $(PRG) *.o *.lst $(DISK_IMAGE) $(MAP_FILE) runme.bin cpm.dsk
 	$(MAKE) -C cpm clean
+	$(MAKE) -C apps clean
 
 distclean:
 	$(MAKE) clean
