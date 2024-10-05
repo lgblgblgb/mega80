@@ -16,6 +16,8 @@ via HALT opcodes. For now, original DR's CPM (BDOS and CCP) v2.2 is used.
 
 Have a look in directory `dist/bin` for a D81 disk image file (`mega65.d81`) for MEGA65.
 
+Here is a link for you: https://raw.githubusercontent.com/lgblgblgb/mega80/refs/heads/master/dist/bin/mega65.d81
+
 ## Limitations / problems / plans
 
 * Current code base is chaotic since major parts of it was written by me in 2017 and I only
@@ -32,10 +34,15 @@ Have a look in directory `dist/bin` for a D81 disk image file (`mega65.d81`) for
     * Commander X16 **if** CPU is 65816 and it can access RAM in higher bankes freely
     * Apple IIgs? Unfortunately I don't know too much about Apple computers, but could be a fun ...
 * Porting for non-65xx CPU based platforms: certainly it's not impossible but then you need to rewrite everything,
-  as it's an assembly project.
+  as it's an assembly project and heavily based on 65xx assembly (even to port to 65816 would require major modifications)
 * Integrated on-the-fly memory monitor and things like that
-* No, I don't plan CP/M v3. The problem: it requires extensive bank switching and other difficulties,
+* No, I don't plan CP/M v3 (as far as I can see now). The problem: it requires extensive bank switching and other difficulties,
   since I'm emulating i8080 (later hopefully a Z80) emulating bank switching would be impossible or very slow
+* Native BDOS? Maybe adopoting Hjalfi's CPM65 with added Z80/i8080 CPU emulation to allow execute both ordinary
+  CP/M (CP/M-80) and CP/M-65 applications.
+    * Also a native BDOS-replacement can be written which does not use CP/M filesystem internally but normal FAT32,
+      thus MEGA65's SD-card would be seen from CP/M as-is without major issue to import/export data/programs between
+      MEGA65 and CP/M environment all the time.
 
 ## Building
 
@@ -56,13 +63,13 @@ Only tested with version v1.20.3 (as of I am writing this), so any older version
 can cause problems, like certain ASSERT features was introduced in v1.18.1 but there
 can be other problems as well.
 
-### Standard UNIX stuff, like sed, make ...
+### Standard UNIX stuff (like sed, make ...)
+
+Using Linux or other kind of UNIX-class OS (including Mac) should be enough.
 
 ### Python 3
 
 ### c1541
 
 ### cpmtools
-
-### wget
 
