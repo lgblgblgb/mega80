@@ -26,6 +26,7 @@
 .INCLUDE "emu.inc"
 .INCLUDE "cpu.inc"
 .INCLUDE "console.inc"
+.INCLUDE "disk.inc"
 
 GW_BUFFER_SIZE = $100
 
@@ -49,9 +50,10 @@ gw_buffer:	.RES	GW_BUFFER_SIZE
 ret:
 	RTS
 jump_table:
-	.WORD	shutdown
-	.WORD	get_host_buffer_addr
-	.WORD	hdos_trap
+	.WORD	shutdown		; func  0
+	.WORD	get_host_buffer_addr	; func  1
+	.WORD	get_info_str		; func  2     will use the CP/M dma!!!
+	.WORD	hdos_trap               ; func  3
 calls = (* - jump_table) / 2
 .ENDPROC
 
@@ -149,3 +151,19 @@ copy2:	.WORD	0					; target addr
 	STA	$D02F		; VIC KEY register, let's mess it up
 	JMP	($FFFC)
 .ENDPROC
+
+
+.PROC	get_info_str
+	.IMPORT	build_info_str
+	LDX	#0
+	LDZ	#0
+:	LDA	build_info_str,X
+	STA32Z	cpm_dma
+	BEQ	:+
+	INX
+	INZ
+	BRA	:-
+:	CLC
+	RTS
+.ENDPROC
+

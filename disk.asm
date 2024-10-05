@@ -37,7 +37,7 @@
 .EXPORTZP	disk_sector
 .EXPORTZP	disk_track
 
-cpm_dma:	.RES 2
+cpm_dma:	.RES 4		; 4 bytes, as we may use it with 32 bit addressing
 disk_sector:	.RES 2
 disk_track:	.RES 2
 
