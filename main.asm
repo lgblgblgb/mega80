@@ -238,18 +238,36 @@ bios_call_table:
 	JMP	cpu_start_with_ret
 .ENDPROC
 
+; --------------------------------------------------------
+; BIOS_LIST: Write character to the printer, wait if printer is not ready
+; Input:  C = character
+; Output: -
+; --------------------------------------------------------
+
 .PROC	BIOS_LIST
-	; Nothing to do, just return [TODO: sure?]
+	; Breaking the rules, I don't wait for printer - as we don't have one - just return ...
 	JMP	cpu_start_with_ret
 .ENDPROC
+
+; --------------------------------------------------------
+; BIOS_PUNCH: Write character to "paper tape punch" / auxiliary device with waiting
+; Input:      C = character
+; Output:     -
+; --------------------------------------------------------
 
 .PROC	BIOS_PUNCH
-	; Nothing to do, just return
+	; Breaking the rules, I don't wait for punch/aux device - as we don't have one - just return ...
 	JMP	cpu_start_with_ret
 .ENDPROC
 
+; --------------------------------------------------------
+; BIOS_READER: Read character from the "paper tape reader" / auxiliary device with waiting
+; Input:  -
+; Output: A = character
+; --------------------------------------------------------
+
 .PROC	BIOS_READER
-	; Return with $1A in A
+	; Return with $1A in A meaning ^Z (end of file)
 	LDA	#$1A
 	STA	cpu_a
 	JMP	cpu_start_with_ret
@@ -271,7 +289,9 @@ bios_call_table:
 ; --------------------------------------------------------
 ; BIOS_SELDSK: Select disk
 ;              Input:  C = drive to select
-;              Output: HL = BIOS disk struct OR zero (error)
+;                      E = bit0 is 0 -> disc is logged in as if new; if the format has to be determined from the boot sector, for example, this will be done.
+;                          bit0 is 1 -> disc has been logged in before. The disc is not accessed
+;              Output: HL = BIOS DPH address (Disk Parameter Header) OR zero in case of error
 ; --------------------------------------------------------
 
 .PROC	BIOS_SELDSK
@@ -291,7 +311,7 @@ error:
 
 ; --------------------------------------------------------
 ; BIOS_SECTRN: Set track for disk I/O
-;              Input:  BC = select track number
+;              Input:  BC = select track number (starts from zero)
 ;              Output: -
 ; --------------------------------------------------------
 
@@ -334,7 +354,7 @@ error:
 ; --------------------------------------------------------
 ; BIOS_READ: Read sector from disk
 ;            Input:  -
-;            Output: A = opresult: 0=OK, 1=ERROR
+;            Output: A = opresult: 0=OK, 1=(unrecoverable)ERROR, $FF = media changed
 ; --------------------------------------------------------
 
 .PROC	BIOS_READ
@@ -346,10 +366,10 @@ error:
 ; --------------------------------------------------------
 ; BIOS_WRITE: Write sector to disk
 ;             Input:  C = deblocking info
-;                         0 = normal sector write
-;                         1 = write to directory sector
-;                         2 = write to the first sector of a new data block
-;             Output: A = opresult: 0=OK, 1=ERROR
+;                         0 = normal sector write [write can be deferred]
+;                         1 = write to directory sector [write must be immediate]
+;                         2 = write to the first sector of a new data block [write can be deferred, no pre-read is needed]
+;             Output: A = opresult: 0=OK, 1=(unrecoverable)ERROR, 2=R/O-DISK, $FF = media changed
 ; --------------------------------------------------------
 
 .PROC	BIOS_WRITE
@@ -357,6 +377,13 @@ error:
 	STA	cpu_a
 	JMP	cpu_start_with_ret
 .ENDPROC
+
+; --------------------------------------------------------
+; BIOS_PRSTAT: Get status of printer
+;              **ALSO called BIOS_LISTST**
+;              Input:  -
+;              Output: 0=not ready, $FF=ready
+;---------------------------------------------------------
 
 .PROC	BIOS_PRSTAT
 	LDA	#0	; "not ready"
@@ -366,7 +393,7 @@ error:
 
 ; --------------------------------------------------------
 ; BIOS_SECTRN: Sector translation
-;              Input:  BC = sector number
+;              Input:  BC = sector number (zero based)
 ;              Output: HL = translated sector number
 ; We give back BC, for 1:1 skew aka "no skew"
 ; --------------------------------------------------------
@@ -397,19 +424,20 @@ error:
 	STA	1
 	JSR	init_console		; that will also set up IRQ and NMI
 	JSR	clear_screen		; the fist call of this initiailizes console out functions
-	WRISTR	{MEGA80_COPYRIGHT,13,10,"M65 OS/DOS versions are "}
-	LDA	#0
-	HYPERDOS
-	JSR	write_hex_byte
-	TXA
-	JSR	write_hex_byte
-	LDA	#32
-	JSR	write_char
-	TYA
-	JSR	write_hex_byte
-	TZA
-	JSR	write_hex_byte
-	JSR	write_crlf
+	WRISTR	{MEGA80_COPYRIGHT,13,10}
+;	WRISTR	{MEGA80_COPYRIGHT,13,10,"M65 OS/DOS versions are "}
+;	LDA	#0
+;	HYPERDOS
+;	JSR	write_hex_byte
+;	TXA
+;	JSR	write_hex_byte
+;	LDA	#32
+;	JSR	write_char
+;	TYA
+;	JSR	write_hex_byte
+;	TZA
+;	JSR	write_hex_byte
+;	JSR	write_crlf
 	JSR	cpu_reset
 	CLI				; beware, interrupts are enabled :-)
 	JSR	command_processor	; call the inspector shell before starting - if enabled in config

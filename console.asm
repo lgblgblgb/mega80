@@ -352,6 +352,7 @@ sprite_shaper2:
 	LDA	#BG_COLOUR
 	STA	$D021
 
+.IF 0
 	LDA	#$80
 	STA	$D400		; freq low byte
 	STA	$D401		; freq hi byte
@@ -366,6 +367,8 @@ sprite_shaper2:
 	STA	$D418		; volume
 	LDA	#16
 	STA	ring_the_bell
+.ENDIF
+
 
 	JMP	empty_kbd
 .ENDPROC
@@ -421,18 +424,18 @@ sprite_shaper2:
 	PHY
 	PHZ
 
-	; Test for BRK
-	TSX
-	LDA	$105,X
-	AND	#$10
-	BEQ	notbrk
-
-
-	INC	$D020
-
-	;JMP	eoi
-
-notbrk:
+;	; Test for BRK
+;	TSX
+;	LDA	$105,X
+;	AND	#$10
+;	BEQ	notbrk
+;
+;
+;	INC	$D020
+;
+;	;JMP	eoi
+;
+;notbrk:
 	; --- KEYBOARD scanning with $D610 ---
 	LDA	key_queued
 	BNE	@already_has		; avoid scanning, if there is already a character extracted to kbd_queued
@@ -481,6 +484,7 @@ notbrk:
 
 
 	; TODO: simple audio events like "bell" (ascii code 7)?
+			BRA		@no_bell
 	LDA	ring_the_bell
 	BEQ	@no_bell
 	DEA
@@ -528,6 +532,7 @@ notbrk:
 
 	;INC	$84E	; "heartbeat"
 
+.IF 0
 	LDA	cpu_pch
 	LSR	A
 	LSR	A
@@ -556,6 +561,7 @@ notbrk:
 	TAX
 	LDA	hextab,X
 	STA	$84F
+.ENDIF
 
 
 
@@ -569,13 +575,15 @@ eoi:
 	PLA
 	RTI
 
+.IF 0
 hextab:
 	.BYTE	"0123456789ABCDEF"
+.ENDIF
 .ENDPROC
 
 
 .PROC	nmi_handler
-	INC	$D020
+;	INC	$D020
 	RTI
 .ENDPROC
 

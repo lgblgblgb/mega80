@@ -29,6 +29,25 @@ ALL_CALLS	= 17
 
 	ASSERT	$ - BIOS_START_ADDRESS = ALL_CALLS * 3, Bad BIOS address jump table being too short or too large.
 
+	; Present a couple of other JPs just in case if a program expects a BIOS which knows more stuff
+
+	JP	halt_tab + 17
+	JP	halt_tab + 18
+	JP	halt_tab + 19
+	JP	halt_tab + 20
+	JP	halt_tab + 21
+	JP	halt_tab + 22
+	JP	halt_tab + 23
+	JP	halt_tab + 24
+	JP	halt_tab + 25
+	JP	halt_tab + 26
+	JP	halt_tab + 27
+	JP	halt_tab + 28
+	JP	halt_tab + 29
+	JP	halt_tab + 30
+	JP	halt_tab + 31
+	JP	halt_tab + 32
+
 ; HALT causes the i8080 emulator to run native code for the BIOS call (calculated from the i8080 program counter
 ; offset from "halt_tab"). The emulator is also responsible to do a "RET" operation as its own, so that's why
 ; you can't see those there. The BIOS handler then examines/uses and modifies CPU registers or even the i8080
@@ -53,7 +72,18 @@ halt_tab:
 	HALT	; BIOS_PRSTAT
 	HALT	; BIOS_SECTRN
 
-	ASSERT	$ - BIOS_START_ADDRESS = ALL_CALLS * 4, Bad BIOS fake op table being too short or too large.
+	ASSERT	$ - halt_tab = ALL_CALLS, Bad BIOS fake op table being too short or too large.
+
+	DB	0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0   ; some further NOPs
+
+	ASSERT  ($ - BIOS_START_ADDRESS) < 0x100, Too long BIOS fake page
+
+
+;CONIN_HACK:
+;	CALL	halt_tab + 2			; call CONST
+;	CP	0
+;	JP	Z, CONIN_HACK
+;	JP	halt_tab + 3			; jump to CONIN
 
 ; ------------------------------------------------------------
 
@@ -84,10 +114,89 @@ M65BIOS_DPH:
 	DW	0		; scratchpad
 	DW	disk_dirbuf	; system-wide, shared DIRBUF pointer
 	DW	dpb_table	; DPB (Disk Parameter Block) pointer
-	DW	chk		; CSV pointer (optional, not implemented), used for software disk change detection
+	DW	0 ; chk  ; was: chk	; CSV pointer (optional, not implemented), used for software disk change detection: IF NOT used, in DPB the CKS should set to zero.
 	DW	alv		; ALV pointer
 
+
+TRACKS		= 17		; number of tracks
+SECTORS		= 256		; sectors per track [currently must be always 256]
+BOOTTRACKS	= 0		; reserved tracks for the OS (for booting, etc)
+BLOCKSIZE	= 2048		; allocation block size
+SECTORSIZE	= 128		; sector size [currently must be always 128]
+DIRENTRIES	= 256		; max number of directory entries
+
+	ASSERT	SECTORS = 256, SECTORS must be 256
+	ASSERT	SECTORSIZE = 128, SECTORSIZE must be 128
+
+DPB_DSM = SECTORS * TRACKS * SECTORSIZE / BLOCKSIZE
+
+	IF 	BLOCKSIZE = 1024
+DPB_BSH = 3
+DPB_BLM = 7
+	IF	DPB_DSM < 256
+DPB_EXM =
+	ELSE
+DPB_EXM =
+	ENDIF
+	ENDIF
+
+	IF	BLOCKSIZE = 2048
+DPB_BSH = 4
+DPB_BLM = 15
+	IF	DPB_DSM < 256
+DPB_EXM = 1
+	ELSE
+DPB_EXM = 0
+	ENDIF
+	ENDIF
+
+	IF	BLOCKSIZE = 4096
+DPB_BSH = 5
+DPB_BLM = 31
+	IF	DPB_DSM < 256
+DPB_EXM =
+	ELSE
+DPB_EXM =
+	ENDIF
+	ENDIF
+
+	IF	BLOCKSIZE = 8192
+DPB_BSH = 6
+DPB_BLM = 63
+	IF	DPB_DSM < 256
+DPB_EXM =
+	ELSE
+DPB_EXM =
+	ENDIF
+	ENDIF
+
+	IF	BLOCKSIZE = 16384
+DPB_BSH = 7
+DPB_BLM = 127
+	IF	DPB_DSM < 256
+DPB_EXM =
+	ELSE
+DPB_EXM =
+	ENDIF
+	ENDIF
+
+
+	IF 1
 ; Disk Parameter Block (DPB)
+dpb_table:
+	DW	256		; SPT: total number of sectors per track aka. logical sectors per track (offset0)
+	DB	4		; BSH: data allocation block shift factor, determined by the data block allocation size.
+	DB	15		; BLM: data allocation block mask (2[BSH-1]).
+	DB	0		; EXM: extent mask, determined by the data block allocation size and the number of disk blocks. ??? 1-> total blocks>255??
+	DW	271		; DSM: total storage capacity of the disk drive (max allocation block number) aka. logical disk size-1 in blocks: (sec*track*128)/blocksize-1
+	DW	255		; DRM: total number of directory entries that can be stored on this drive MINUS-1
+	DB	0xF0		; AL0: determine reserved directory blocks.
+	DB	0		; AL1: -- "" ---
+	DW	0  ; was 16	; CKS: size of the directory check vector (non-removable media in out case, let's use zero!)
+	DW	0		; OFF: number of reserved tracks at the beginning of the (logical) disk. [OFF=OFFset]
+	;ENDIF
+	ELSE
+	;IF 1
 dpb_table:
 	DW	256		; SPT: total number of sectors per track
 	DB	4		; BSH: data allocation block shift factor, determined by the data block allocation size.
@@ -97,8 +206,17 @@ dpb_table:
 	DW	256		; DRM: total number of directory entries that can be stored on this drive.
 	DB	0		; AL0: determine reserved directory blocks.
 	DB	0		; AL1: -- "" ---
-	DW	16		; CKS: size of the directory check vector.
+	DW	0		; CKS: size of the directory check vector.
 	DW	0		; OFF: number of reserved tracks at the beginning of the (logical) disk.
+	ENDIF
+
+
+; DPB explanation:
+; DRM can be any value that when multiplied by 32 fits evenly in an allocation block
+; In our case: DRM is 255 which mins 256 entries. When it's multiplied with 32, we get 8192
+; that evently fits into 8192/2048=4 allocation blocks (2048 here: the logical block size)
+; That also means, this 4 must be used for the "AL" fields but in a very odd way:
+; AL0 must be $F0, and AL1 is $0 (since the result means the number of bits to set ....)
 
 
 ; ------ ONLY UN'INIT'ED stuff can goes here from this point -----
@@ -108,9 +226,10 @@ M65BIOS_NONBSS_SIZE = NONBSS_SIZE
 
 
 disk_dirbuf:	DS	128
-alv:		DS	31
+; alv size must be:  (DSM/8) + 1
+alv:		DS	35
 chk:		DS	16
-stack:		DS	128
+stack:		DS	16
 stack_top =	$
 
 

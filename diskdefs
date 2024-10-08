@@ -1,6 +1,6 @@
 diskdef mega65
   seclen 128
-  tracks 16
+  tracks 17
   sectrk 256
   blocksize 2048
   maxdir 256
