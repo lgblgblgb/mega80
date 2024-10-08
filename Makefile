@@ -22,7 +22,7 @@ LD65_CFG	= emu.ld
 PRG_ON_DISK	= emu
 MAP_FILE	= emu.map
 SOURCES		= console.asm cpu.asm loader.asm main.asm shell.asm fontdata.asm disk.asm megagw.asm
-INCLUDES	= $(shell ls *.inc) cpm/bios.inc cpm/cpm22.inc
+INCLUDES	= $(shell ls *.inc) cpm/bios.inc cpm/cpm22.inc cpm/info.inc
 OBJECTS		= $(SOURCES:.asm=.o)
 M65_IP		= 192.168.0.65
 ALL_DEPENDS	= Makefile
@@ -50,7 +50,7 @@ cpu_tables.inc: cpu_gen_tables.py
 apps/*.com:
 	$(MAKE) -C apps
 
-cpm/bios.inc cpm/cpm22.inc cpm/bios.bin cpm/cpm22.bin:
+cpm/bios.inc cpm/cpm22.inc cpm/bios.bin cpm/cpm22.bin cpm/info.inc:
 	$(MAKE) -C cpm
 
 %.o: %.asm $(ALL_DEPENDS) $(INCLUDES)
