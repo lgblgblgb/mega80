@@ -4,28 +4,162 @@ import sys
 
 # http://unusedino.de/ec64/technical/formats/d81.html
 
+#### --[ Do NOT edit these numbers! ]--
+D81_SIZE = 819200                      ;
+TRACK_SIZE = 40 * 256                  ;
+#### ----------------------------------
+
+with open("../emu.prg", "rb") as psize:
+    psize = len(psize.read())
+
+print("Size of MEGA/80 program is: {}".format(psize))
+
+psize = (psize // 254) + (1 if psize % 254 != 0 else 0)
+
+print("Blocks needed for MEGA/80: {}".format(psize))
+
+psize = (psize // 40) + (1 if psize % 40 != 0 else 0)
+
+print("Tracks needed for MEGA/80: {}".format(psize))
 
 
-disk = bytearray(819200)
-print("DISK SIZE = {}".format(len(disk)))
+# Must be 1024 or 2048
+CPM_BLOCKSIZE = 2048
+#CPM_TRACKS = SLICE0_TRACKS + SLICE1_TRACKS
+#CPM_SECTORS = TRACK_SIZE / 128
 
-for a in (
-    (0x00061800, "28 03 44 00 4c 47 42 a0 a0 a0 a0 a0 a0 a0 a0 a0 a0 a0 a0 a0 a0 a0 49 44 a0 33 44 a0 a0"),
-    (0x00061900, "28 02 44 bb 49 44 c0"),
-    (0x00061910, "25 f4 ff ff ff ff"),
-    (0x000619f0, "00 00 00 00 00 00 00 00 00 00 24 f0 ff ff ff ff 00 ff 44 bb 49 44 c0"),
-    (0x00061ae0, "00 00 28 ff ff ff ff ff 28 ff ff ff ff ff 28 ff"),
-    (0x00061af0, "ff ff ff ff 28 ff ff ff ff ff 28 ff ff ff ff ff"),
-    (0x00061b00, "00 ff"),
-):
-    a, s = a[0], [int(x, 16) for x in a[1].strip().split()]
-    disk[a : a + len(s)] = s
+
+
+# Number of tracks to be reserved for CBM-DOS (less CP/M disk space!)
+# This does NOT include the one track CBM-DOS directory track, that's always reserved even if RESERVE is set to 0 here
+# One track is 10Kbytes (TRACK_SIZE)
+# Set to "psize" to allow emulator to fit!
+RESERVE = 0
+
+SLICE0_TRACKS = 39 - RESERVE      # This slice is from track 1 to 39 (or lower when reserved track exist), track 40 is CBM directory track!!!!
+SLICE1_TRACKS = 40                # This slice is from track 41 to 80, 40 tracks in total
+
+
+CAPACITY = (SLICE0_TRACKS + SLICE1_TRACKS) * TRACK_SIZE
+CPM_TRACKS = CAPACITY / (128 * 4)   # in CP/M we use 4 sectors per track ...
+SLICE0_CPM_TRACKS = SLICE0_TRACKS * 40 / 2
+CPM_CAPACITY = CAPACITY // CPM_BLOCKSIZE
+
+if CAPACITY % CPM_BLOCKSIZE:
+    raise RuntimeError("Bad capacity vs CP/M blocksize")
+
+
+print("D81-size = {}, CP/M-size = {} ({}%), CP/M alloc units = {}, CP/M tracks (slice0) = {} ({})".format(D81_SIZE, CAPACITY, 100 * CAPACITY // D81_SIZE, CPM_CAPACITY, CPM_TRACKS, SLICE0_CPM_TRACKS))
+
+
+def setname(bs, offs, size, filler, text):
+    for a in range(size):
+        bs[offs + a] = ord(text[a]) if a < len(text) else filler
+
+
+
+
+disk = bytearray(D81_SIZE)
+
+if False:
+    for a in (
+        (0x00061800, "28 03 44 00 4c 47 42 a0 a0 a0 a0 a0 a0 a0 a0 a0 a0 a0 a0 a0 a0 a0 49 44 a0 33 44 a0 a0"),
+        (0x00061900, "28 02 44 bb 49 44 c0"),
+        (0x00061910, "25 f4 ff ff ff ff"),
+        (0x000619f0, "00 00 00 00 00 00 00 00 00 00 24 f0 ff ff ff ff 00 ff 44 bb 49 44 c0"),
+        (0x00061ae0, "00 00 28 ff ff ff ff ff 28 ff ff ff ff ff 28 ff"),
+        (0x00061af0, "ff ff ff ff 28 ff ff ff ff ff 28 ff ff ff ff ff"),
+        (0x00061b00, "00 ff"),
+    ):
+        a, s = a[0], [int(x, 16) for x in a[1].strip().split()]
+        disk[a : a + len(s)] = s
+
+DISK_ID0 = ord("8")
+DISK_ID1 = ord("0")
+CBM_VER = 0x44
+
+
+# track 40, sector 0: head sector, disk name ...
+# track 40, sector 1: BAM - part 1
+# track 40, sector 2: BAM - part 2
+# track 40, sector 3: the first directory sector
+
+o = 0x61800
+
+disk[o + 0x00] = 40    # ptr to directory track and sector, must be 40/3
+disk[o + 0x01] =  3    # -----""------
+disk[o + 0x02] = CBM_VER
+setname(disk, o + 0x04, 16, 0xA0, "MEGA/80 BOOT DSK")
+disk[o + 0x14] = 0xA0
+disk[o + 0x15] = 0xA0
+disk[o + 0x16] = DISK_ID0
+disk[o + 0x17] = DISK_ID1
+disk[o + 0x18] = 0xA0
+disk[o + 0x19] = ord("3")
+disk[o + 0x1A] = ord("D")
+disk[o + 0x1B] = 0xA0
+disk[o + 0x1C] = 0xA0
+# MEGA/80 extensions, CP/M disk geometry info:
+setname(disk, o + 0xAD, 16, 0xA0, "MEGA80")
+# disk[o + 0xC0] <--- this will be the start of the stuff
+# ...-> Copy of slice0 dir entry
+# ...-> Copy of slice1 dir entry
+
+
+
+#      0  1  2  3  4  5  6
+# 00: 28 02 44 BB 47 42 C0 00 00 00 00 00 00 00 00 00   (.D?GB+?????????
+#     00 FF 44 BB 47 42 C0 00 00 00 00 00 00 00 00 00   (.D?GB+?????????
+
+disk[o + 0x100] = 40
+disk[o + 0x200] = 0x00
+disk[o + 0x101] =  2
+disk[o + 0x201] = 0xFF
+disk[o + 0x102] = CBM_VER
+disk[o + 0x202] = CBM_VER
+disk[o + 0x103] = 0xFF - CBM_VER
+disk[o + 0x203] = 0xFF - CBM_VER
+disk[o + 0x104] = DISK_ID0
+disk[o + 0x204] = DISK_ID0
+disk[o + 0x105] = DISK_ID1
+disk[o + 0x205] = DISK_ID1
+disk[o + 0x106] = 0xC0
+disk[o + 0x206] = 0xC0
+
+
+disk[o + 0x300] = 0
+disk[o + 0x301] = 0xFF
+
+
+disk[o + 0x3C2] = 0x85 + 0x40   # file type: CBM + lock bit
+disk[o + 0x3C3] = 1             # starts on track 1
+disk[o + 0x3C4] = 0             # ... and sector 0
+setname(disk, o + 0x3C5, 16, 0xA0, "CP/M DISK POOL 0")
+disk[o + 0x3DE] = (SLICE0_TRACKS * 40) & 0xFF
+disk[o + 0x3DF] = (SLICE0_TRACKS * 40) >> 8
+
+disk[o + 0x3E2] = 0x85 + 0x40   # file type: CBM + lock bit
+disk[o + 0x3E3] = 41            # starts on track 41
+disk[o + 0x3E4] = 0             # ... and sector 0
+setname(disk, o + 0x3E5, 16, 0xA0, "CP/M DISK POOL 1")
+disk[o + 0x3FE] = (SLICE1_TRACKS * 40) & 0xFF
+disk[o + 0x3FF] = (SLICE1_TRACKS * 40) >> 8
+
+for a in range(64):
+    disk[o + 0x0C0 + a] = disk[o + 0x3C0 + a] ^ 0xFF
+
+
+
+
 
 
 
 
 with open("test.d81","wb") as f:
     f.write(disk)
+
+
+
 
 
 
@@ -82,7 +216,9 @@ plan.d81:
 	.BYTE	"CP/M DISK POOL /"	; Configuration file
 	         CP/M !SYS-DSK! /
 	.BYTE	"CP/M DISK POOL 0"	; $5 exactly 16 bytes
-	
+             CP/M DISK PART 0
+                  DSK-SLICE
+
 
 	.BYTE	"CP/M DISK POOL 1"
 

@@ -30,6 +30,7 @@
 .INCLUDE "mega65.inc"
 .INCLUDE "emu.inc"
 .INCLUDE "console.inc"
+.INCLUDE "cpm/bios.inc"
 
 .ZEROPAGE
 
@@ -45,9 +46,29 @@ disk_track:	.RES 2
 
 
 ; --------------------------------------------------------
+; Input:  Accu = drive to select, X = select mode [bit 0]
+; Output: Accu[LOW byte], X-reg[HI byte] -> DPH
+;         OR: Accu/X = 0 -> ERROR
+; --------------------------------------------------------
+
+.EXPORT	disk_select
+.PROC	disk_select
+	TAY			; sets the flags according to Accu
+	BNE	error		; currently one drive is supported (drive zero) only, thus non-zero value is an error
+	LDA	#.LOBYTE(M65BIOS_DPH)
+	LDX	#.HIBYTE(M65BIOS_DPH)
+	RTS
+error:
+	; A=X=0 -> error situation, drive couldn't be selected
+	LDA	#0
+	TAX
+	RTS
+.ENDPROC
+
+; --------------------------------------------------------
 ; BIOS_READ: Read sector from disk
 ;            Input:  -
-;            Output: A = opresult: 0=OK, 1=(unrecoverable)ERROR, $FF = media changed
+;            Output: Accu = opresult: 0=OK, 1=(unrecoverable)ERROR, $FF = media changed
 ; --------------------------------------------------------
 
 .EXPORT	disk_read
@@ -118,7 +139,7 @@ error:
 ;                         0 = normal sector write [write can be deferred]
 ;                         1 = write to directory sector [write must be immediate]
 ;                         2 = write to the first sector of a new data block [write can be deferred, no pre-read is needed]
-;             Output: A = opresult: 0=OK, 1=(unrecoverable)ERROR, 2=R/O-DISK, $FF = media changed
+;             Output: Accu = opresult: 0=OK, 1=(unrecoverable)ERROR, 2=R/O-DISK, $FF = media changed
 ; --------------------------------------------------------
 
 .EXPORT	disk_write

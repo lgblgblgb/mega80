@@ -1,3 +1,27 @@
+40 [256 byte] sector / track
+80 [128 byte] sector / track
+
+CP/M calc:
+
+(track * 80 + sector) * 256
+
+80 = 64 + 16
+
+(track * 64 + track * 16 + sector) * 256
+
+track * 16384 + track * 4096 + sector * 256
+
+sector = 0 - 3   [offset within 512 byte real SD sector]
+
+drive_a_valid_cached_sd: .RES 200
+drive_b_valid_cached_sd: .RES 200
+
+
+drive_x_valid_cache_sd_ptr: .RES 2
+
+
+
+
 plan.d81:
 
 00061b00  00 ff 85 02 00 43 50 4d  50 4f 4f 4c 2e 30 a0 a0  |.....CPMPOOL.0..|
@@ -31,7 +55,7 @@ plan.d81:
 	.BYTE	"CP/M DISK POOL /"	; Configuration file
 	         CP/M SYS-DISK! /
 	.BYTE	"CP/M DISK POOL 0"	; $5 exactly 16 bytes
-	
+
 
 	.BYTE	"CP/M DISK POOL 1"
 

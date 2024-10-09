@@ -28,7 +28,7 @@
 .INCLUDE "console.inc"
 .INCLUDE "disk.inc"
 
-GW_BUFFER_SIZE = $100
+GW_BUFFER_SIZE = 1024
 
 .BSS
 

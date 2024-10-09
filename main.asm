@@ -295,17 +295,11 @@ bios_call_table:
 ; --------------------------------------------------------
 
 .PROC	BIOS_SELDSK
-	LDA	cpu_c
-	BNE	error		; currently one drive is supported (drive zero) only, thus non-zero value is an error
-	LDA	#.LOBYTE(M65BIOS_DPH)
-	STA	cpu_l
-	LDA	#.HIBYTE(M65BIOS_DPH)
-	STA	cpu_h
-	JMP	cpu_start_with_ret
-error:
-	LDA	#0
-	STA	cpu_l
-	STA	cpu_h
+	LDA	cpu_c		; drive to select
+	LDX	cpu_e		; select mode (bit 0)
+	JSR	disk_select
+	STA	cpu_l		; result in HL
+	STX	cpu_h
 	JMP	cpu_start_with_ret
 .ENDPROC
 
@@ -425,19 +419,6 @@ error:
 	JSR	init_console		; that will also set up IRQ and NMI
 	JSR	clear_screen		; the fist call of this initiailizes console out functions
 	WRISTR	{MEGA80_COPYRIGHT,13,10}
-;	WRISTR	{MEGA80_COPYRIGHT,13,10,"M65 OS/DOS versions are "}
-;	LDA	#0
-;	HYPERDOS
-;	JSR	write_hex_byte
-;	TXA
-;	JSR	write_hex_byte
-;	LDA	#32
-;	JSR	write_char
-;	TYA
-;	JSR	write_hex_byte
-;	TZA
-;	JSR	write_hex_byte
-;	JSR	write_crlf
 	JSR	cpu_reset
 	CLI				; beware, interrupts are enabled :-)
 	JSR	command_processor	; call the inspector shell before starting - if enabled in config

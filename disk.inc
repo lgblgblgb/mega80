@@ -4,3 +4,4 @@
 
 .IMPORT disk_read
 .IMPORT disk_write
+.IMPORT disk_select

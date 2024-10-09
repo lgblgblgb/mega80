@@ -299,7 +299,7 @@ screen_line_tab_hi:
 	; Turn hot-register off
 	LDA	#$80
 	TRB	$D05D
-	; Setup or own character set included
+	; Setup our own character set included in MEGA/80
 	.IMPORT	font_data
 	LDA	#.LOBYTE(font_data)
 	STA	$D068
