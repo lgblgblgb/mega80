@@ -21,32 +21,80 @@ lastline:
 	.WORD 0
 .ENDSCOPE
 
+
+
+sd_cmp_temp:	.BYTE	0
+
+
+.PROC	sd_wait
+	LDA	irq_counter
+	BMI	timeout
+	LDA	$D680
+	AND	#3
+	BNE	sd_wait
+	CLC
+	RTS
+timeout:
+	SEC
+	RTS
+.ENDPROC
+
+
 ; Sector is relative to the mounting registers!
 ; Sector is always 512 bytes long (1600 of them on a D81)
-sdimg_read_sector:
+; A=SD-card controller command to send
+; X=D81 512 byte sector LBA, low byte
+; Z= --""--, hi byte
+; Y=current drive [MAKE SURE the drive is valid!!]
+; SD buffer must be filled before (write-op), or read after (read-op)
+.PROC	sd_op_lba
+	; Save the SD-card command
+	STA	sd_cmd_temp
 	; Check if we're in the range (0..1599, ie 0-$63F)
-	LDA	sd_ofs+1
+	TZA
 	CMP	#6
-	BCC	ok
+	BCC	doit
 	BNE	error
-	LDA	sd_ofs
-	CM
-
-
-	LDA	sd_img_base
+	TXA
+	CMP	#$40
+	BCC	doit
+timeout:
+error:	SEC
+	RTS
+	; Calculate offset
+doit:	TXA
 	CLC
-	ADC	sd_ofs
-	STA	R
-	LDA	sd_img_base+1
-	ADC	sd_ofs+1
-	STA	R+1
-	LDA	sd_img_base+2
-	ADC	#0
-	STA	R+2
-	LDA	sd_img_base+3
-	ADC	#0
-	STA	R+3
-	; Initiate read command
+	ADC	drive_sd_img_base_b0,Y
+	STA	$D681
+	TZA
+	ADC	drive_sd_img_base_b1,Y
+	STA	$D682
+	LDA	#0
+	ADC	drive_sd_img_base_b2,Y
+	STA	$D682
+	LDA	#0
+	ADC	drive_sd_img_base_b3,Y
+	STA	$D683
+	; Begint of timeout protected section
+	LDA	#60		; give approx 1 sec of time for the operation to work out
+	STA	irq_counter
+	; Just to be on the safe side: wait for SD-controller to be ready
+	JSR	sd_wait
+	BCS	timeout
+	; Issue the command
+	LDA	sd_cmd_temp
+	STA	$D680
+	; Again, wait for SD-controller to be ready, now to finnish the command we've issued above
+	JSR	sd_wait
+	BCS	timeout
+	; check error
+	LDA	$D680
+	AND	#$40+$20
+	BNE	operr
+	; OK :-)
+	CLC
+	RTS
+.ENDPROC
 
 
 ; Uses 128 byte sector notion.
@@ -54,8 +102,24 @@ sdimg_read_sector:
 cpmimg_read_sector:
 
 
+; Input: Y=current drive
 
 .PROC	check_mega80_disk_format
+	; Read disk, we need the first three "CBM sector" which needs two 512-bytes sectors to cover
+	LDA	#SD_CMD_READ
+	LDX
+	LDZ
+	JSR	sd_op_lba
+	BCS	error
+	JSR	sd
+	LDA	#SD_CMD_READ
+	LDX
+	LDZ
+	JSR	sd_op_lba
+	BCS	error
+	; copy to buffer
+
+
 	; Check the format ID
 	LDX	#5
 :	LDA	diskid,X
@@ -86,7 +150,7 @@ cpmimg_read_sector:
 	BNE	nope
 	CMP	#'1'
 	BNE	nope
-	; Check types
+	; Check slice types
 	LDA	#$85+$40
 	CMP	diskbuffer+$3C2
 	BNE	nope

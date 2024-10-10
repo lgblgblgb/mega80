@@ -37,13 +37,15 @@ CURSOR_COLOUR	= 2
 
 .ZEROPAGE
 
-key_queued:	.RES 1
-key_timing:	.RES 1
-string_p:	.RES 2
-cursor_x:	.RES 1
-cursor_y:	.RES 1
+key_queued:		.RES 1
+key_timing:		.RES 1
+string_p:		.RES 2
+cursor_x:		.RES 1
+cursor_y:		.RES 1
 cursor_blink_counter:	.RES 1
 ring_the_bell:		.RES 1
+irq_counter:		.RES 1
+
 
 .CODE
 
@@ -564,7 +566,7 @@ sprite_shaper2:
 .ENDIF
 
 
-
+	INC	irq_counter
 
 	ASL	$D019	; acknowledge VIC interrupt (note: it wouldn't work on a real C65 as RMW opcodes are different but it does work on M65 as on C64 too!)
 
