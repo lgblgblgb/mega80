@@ -1,3 +1,5 @@
+; vi: ft=ca65
+
 .WORD	$2001
 .ORG	$2001
 .SETCPU	"4510"
@@ -22,13 +24,49 @@ lastline:
 .ENDSCOPE
 
 
+; Must be moved into BSS segment later
+sd_cmd_tmp:		.BYTE	0	; workspace for sd_op_lba
+drive_sd_img_base_b0:	.BYTE 0,0
+drive_sd_img_base_b1:	.BYTE 0,0
+drive_sd_img_base_b2:	.BYTE 0,0
+drive_sd_img_base_b3:	.BYTE 0,0
+current_drive:		.BYTE 0
+diskbuffer:		.RES	1024
+irq_counter:		.RES	1
 
-sd_cmp_temp:	.BYTE	0
+.MACRO  WRISTR  str
+	JSR	write_inline_string
+	.BYTE	str
+	.BYTE	0
+.ENDMACRO
+
+CHROUT = $FFD2
+write_char = CHROUT
+string_p = $2
+
+
+.PROC	write_inline_string
+        PLA
+        STA     string_p
+        PLA
+        STA     string_p+1
+        PHZ
+:       INW     string_p
+	LDZ	#0
+        LDA     (string_p),Z
+        BEQ     :+
+        JSR     write_char
+        BRA     :-
+:       INW     string_p
+        PLZ
+        JMP     (string_p)
+.ENDPROC
+
 
 
 .PROC	sd_wait
-	LDA	irq_counter
-	BMI	timeout
+	LDA	irq_counter	; check the IRQ incremented counter
+	BMI	timeout		; if counter hits 128 or more (to avoid "catching the moment" situation for some odd reason)
 	LDA	$D680
 	AND	#3
 	BNE	sd_wait
@@ -49,7 +87,7 @@ timeout:
 ; SD buffer must be filled before (write-op), or read after (read-op)
 .PROC	sd_op_lba
 	; Save the SD-card command
-	STA	sd_cmd_temp
+	STA	sd_cmd_tmp
 	; Check if we're in the range (0..1599, ie 0-$63F)
 	TZA
 	CMP	#6
@@ -61,7 +99,7 @@ timeout:
 timeout:
 error:	SEC
 	RTS
-	; Calculate offset
+	; IMG_BASE + Z/X -> SD-ctrl SD-sector registers
 doit:	TXA
 	CLC
 	ADC	drive_sd_img_base_b0,Y
@@ -71,30 +109,37 @@ doit:	TXA
 	STA	$D682
 	LDA	#0
 	ADC	drive_sd_img_base_b2,Y
-	STA	$D682
+	STA	$D683
 	LDA	#0
 	ADC	drive_sd_img_base_b3,Y
-	STA	$D683
-	; Begint of timeout protected section
-	LDA	#60		; give approx 1 sec of time for the operation to work out
+	STA	$D684
+	; Use the IRQ incremented variable to have some time-out
+	LDA	#128 - 60	; give approx 1 sec of time for the operation to work out (see sd_wait)
 	STA	irq_counter
 	; Just to be on the safe side: wait for SD-controller to be ready
 	JSR	sd_wait
 	BCS	timeout
 	; Issue the command
-	LDA	sd_cmd_temp
+	LDA	sd_cmd_tmp
 	STA	$D680
-	; Again, wait for SD-controller to be ready, now to finnish the command we've issued above
+	; Again, wait for SD-controller to be ready, this time: to wait for the command finished we've issued above
 	JSR	sd_wait
 	BCS	timeout
-	; check error
+	; check error status
+	; TODO: maybe we need reset-retry on error?
 	LDA	$D680
 	AND	#$40+$20
-	BNE	operr
+	BNE	error
 	; OK :-)
 	CLC
 	RTS
 .ENDPROC
+
+.PROC	sd_rd_lba
+	LDA	#2	; SD-read command
+	JMP	sd_op_lba
+.ENDPROC
+
 
 
 ; Uses 128 byte sector notion.
@@ -103,23 +148,37 @@ cpmimg_read_sector:
 
 
 ; Input: Y=current drive
-
 .PROC	check_mega80_disk_format
-	; Read disk, we need the first three "CBM sector" which needs two 512-bytes sectors to cover
-	LDA	#SD_CMD_READ
-	LDX
-	LDZ
-	JSR	sd_op_lba
-	BCS	error
-	JSR	sd
-	LDA	#SD_CMD_READ
-	LDX
-	LDZ
-	JSR	sd_op_lba
+	; Read disk, we need the first three "CBM sector" (256 bytes each) which needs two 512-bytes sectors to cover
+	LDX	#.LOBYTE(800)	; "LBA" 512-byte sector number low byte
+	LDZ	#.HIBYTE(800)	; --""-- high byte
+	JSR	sd_rd_lba
 	BCS	error
 	; copy to buffer
-
-
+	STA	$D707					; trigger in-line DMA
+	.BYTE	$A,$80,$80,0				; enhanced mode opts
+	.BYTE	0					; DMA command: copy and not chained
+	.WORD	512					; DMA length
+	.WORD	0					; source addr, in case of "fill" the low byte is the byte to fill with
+	.BYTE	0					; source bank + other info
+	.WORD	diskbuffer				; target addr
+	.BYTE	0					; target bank + other info
+	.WORD	0					; modulo: not used
+	JSR	sd_op_lba
+	LDX	#.LOBYTE(801)
+	LDZ	#.HIBYTE(801)
+	JSR	sd_rd_lba
+	BCS	error
+	; copy to buffer
+	STA	$D707					; trigger in-line DMA
+	.BYTE	$A,$80,$80,0				; enhanced mode opts
+	.BYTE	0					; DMA command: copy and not chained
+	.WORD	512					; DMA length
+	.WORD	0					; source addr, in case of "fill" the low byte is the byte to fill with
+	.BYTE	0					; source bank + other info
+	.WORD	diskbuffer+512				; target addr
+	.BYTE	0					; target bank + other info
+	.WORD	0					; modulo: not used
 	; Check the format ID
 	LDX	#5
 :	LDA	diskid,X
@@ -158,10 +217,12 @@ cpmimg_read_sector:
 	BNE	nope
 	; At this point, probably we're OK to trust that the disk is correct ...
 	LDX	current_drive
-	TODO: we want to read parameters from disk and apply to the system
+	;TODO: we want to read parameters from disk and apply to the system
 
+	CLC
+	RTS
 
-
+error:
 nope:	; *** Not a MEGA/80 CP/M format disk ***
 	SEC
 	RTS
@@ -170,22 +231,112 @@ nameid:	.BYTE "CP/M DISK POOL "		; 15 bytes
 .ENDPROC
 
 
+HDOS_BUFFER = $400
 
+; HDOS_SETNAME
+; Input:  A = ASCIIZ name ptr low byte
+;         Y = ASCIIZ name ptr high byte
+; Output: Carry SET   = OK [WARNING! Opposite as usual!]
+;         Carry clear = ERROR
+; Hyppo/HDOS needs (256 byte) page aligned data for SETNAME!
+; Thus we must copy the input parameter first
+.PROC	hdos_setname
+	STA	string_p
+	STY	string_p+1
+	LDY	#0
+:	LDA	(string_p),Y
+	STA	HDOS_BUFFER, Y
+	BEQ	:+
+	INY
+	BPL	:-
+	CLC	; too long - longer than 128 bytes?!
+	RTS
+:	LDA	#$2E	; HDOS: "setname" function
+	LDY	#.HIBYTE(HDOS_BUFFER)
+	STA	$D640
+	CLV
+	RTS
+toolong:
+	CLC
+	RTS
+.ENDPROC
+
+
+
+
+d81name: .BYTE "DIR.D81",0
 
 
 stub_main:
+	LDA	#.LOBYTE(d81name)
+	LDY	#.HIBYTE(d81name)
+	JSR	hdos_setname
+
+	; Do the actual "mounting"
+	LDA	#$40	; HDOS: d81attach0
+	STA	$D640	; the trap!
+	CLV
+
 	LDA	$D68C
-	ORA	$D68D
-	ORA	$D68E
-	ORA	$D68F
-	BEQ	zero_is_invalid
+	STA	drive_sd_img_base_b0
+	LDA	$D68D
+	STA	drive_sd_img_base_b1
+	LDA	$D68E
+	STA	drive_sd_img_base_b2
+	LDA	$D68F
+	STA	drive_sd_img_base_b3
 
+	JSR	check_mega80_disk_format
 
-	LDA	$D68C,X
-	STA	sdsec
+;	LDA	#'!'
+;	JSR	CHROUT
+;	WRISTR	"EZ KOMOLY"
 
+	LDA	#$12	; HDOS: opendir
+	STA	$D640
+	CLV
+	TAX		; returned file descriptor by "opendir" moved to X
 
+@readdir:
+	LDA	#$14	; HDOS: readdir, needs fd in X
+	LDY	#.HIBYTE(HDOS_BUFFER)
+	STA	$D640
+	CLV
+	BCC	@error_or_eod
 
+	LDY	#' '
+	LDA	HDOS_BUFFER+$56
+	AND	#16
+	BEQ	:+
+	LDY	#'>'
+:	TYA
+	JSR	CHROUT
+	LDY	#0
+:	LDA	HDOS_BUFFER+65,Y
+	JSR	CHROUT
+	INY
+	CPY	#8
+	BNE	:-
+	LDA	#' '
+	JSR	CHROUT
+	LDA	HDOS_BUFFER+65+8
+	JSR	CHROUT
+	LDA	HDOS_BUFFER+65+9
+	JSR	CHROUT
+	LDA	HDOS_BUFFER+65+10
+	JSR	CHROUT
+	LDA	#' '
+	JSR	CHROUT
+	LDA	#'|'
+	JSR	CHROUT
+	LDA	#' '
+	JSR	CHROUT
+	BRA	@readdir
+
+@error_or_eod:
+	LDA	#$16	; HDOS: closedir, needs fd in X
+	STA	$D640
+	CLV
 
 
 	RTS
