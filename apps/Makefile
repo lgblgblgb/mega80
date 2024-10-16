@@ -1,8 +1,7 @@
 ASM80		= sjasmplus --nologo --msg=war --i8080 --fullpath --color=auto
 
 SOURCES		= $(shell ls *.asm)
-#INCLUDES	= $(shell ls *.inc)
-INCLUDES	=
+INCLUDES	= common.inc
 PROGRAMS	= $(SOURCES:.asm=.com)
 
 

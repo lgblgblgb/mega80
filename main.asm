@@ -1,5 +1,5 @@
 ; ----------------------------------------------------------------------------
-;
+; vi: ft=ca65
 ; Software emulator of the 8080 CPU for the MEGA65, intended for CP/M or such.
 ; Please read comments throughout this source for more information.
 ;
@@ -40,14 +40,16 @@
 
 .SEGMENT "PAYLOAD"
 
-
 ; These must be exactly next to each other in exactly this order:
 bdos_image:	.INCBIN	"cpm/cpm22.bin"
 bios_image:	.INCBIN "cpm/bios.bin",0,M65BIOS_NONBSS_SIZE
 
+.BSS
+
+.EXPORT is_megagw_active
+is_megagw_active:	.RES 1
 
 .CODE
-
 
 
 .PROC	fatal_error
@@ -66,13 +68,40 @@ bios_image:	.INCBIN "cpm/bios.bin",0,M65BIOS_NONBSS_SIZE
 .ENDPROC
 
 
+.EXPORT	return_cpu_out
+.PROC	return_cpu_out
+	INW	cpu_pc
+	LDA32Z	cpu_pc		; fetch the port of the "OUT" instruction: this will form the func code of the MEGA65-GW call
+	BEQ	:+
+	LDX	is_megagw_active
+	BEQ	no_active_mega_call
+	.IMPORT	megagw_calls
+	CMP	#<megagw_calls
+	BCS	bad_mega_call
+:	ASL	A
+	TAX
+	INW	cpu_pc
+	.IMPORT	megagw_jump_table
+	JSR	(megagw_jump_table,X)
+	LDA	cpu_f		; "transfer" 65xx carry into 8080 carry
+	AND	#$FE
+	ADC	#0
+	STA	cpu_f
+	JMP	cpu_start
+bad_mega_call:
+	WRISTR	{13,10,"*** Invalid MEGA-GW call #$"}
+	LDA	cpu_a
+	JSR	write_hex_byte
+	JMP	fatal_error
+no_active_mega_call:
+	WRISTR	{13,10,"*** MEGA-GW is not activated"}
+	JMP	fatal_error
+.ENDPROC
+
+
 ; Input: depends on the PC value of the i8080 emulator only!
 .EXPORT	return_cpu_leave
 .PROC	return_cpu_leave
-	LDA	cpu_pch
-	AND	cpu_pcl
-	CMP	#$FF
-	BEQ	mega65_special
 	LDA	cpu_pch
 	CMP	#.HIBYTE(M65BIOS_START_BIOS)
 	BNE	not_halt_tab
@@ -93,12 +122,6 @@ bad_halt_ofs:
 	PLA
 	JSR	write_hex_byte
 	JMP	fatal_error
-mega65_special:
-	.IMPORT	megagw
-	JSR	megagw
-	LBCC	cpu_start_with_ret
-	WRISTR	{13,10,"*** Invalid MEGA-GW call"}
-	JMP	fatal_error
 bios_call_table:
 	.WORD	BIOS_BOOT,   BIOS_WBOOT,  BIOS_CONST,  BIOS_CONIN
 	.WORD	BIOS_CONOUT, BIOS_LIST,   BIOS_PUNCH,  BIOS_READER
@@ -110,6 +133,13 @@ bios_call_table:
 ; *** Common part of BOOT and WBOOT
 
 .PROC	go_cpm
+	; Clear MEGAGW gate (so programs needs to enable first)
+	LDA	#0
+	STA	is_megagw_active
+	; Make sure we've closed all HDOS files
+	.IMPORT	hdos_closeall
+	JSR	hdos_closeall
+	; Set default CP/M
 	LDA	#$80
 	STA	cpm_dma
 	LDA	#I8080_BANK

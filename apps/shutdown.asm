@@ -1,23 +1,19 @@
-	ORG	$100
+	INCLUDE	"common.inc"
 
-	; BDOS function to display a '$' terminated string
-	LD	C,9
-	LD	DE, msg
-	CALL	5
+main:
+	OUT	(GW_PRINT_ASCIIZ_INLINE), A
+	DB "Press Y to confirm MEGA/80 CP/M shutdown (RAMDRIVE changes will be lost) ",0
 
-	; BDOS function to get a character
-	LD	C,1
-	CALL	5
-	CP	A,'y'
+	OUT	(GW_GET_KEY), A
+
+	; Check confirmation for shutdown
+	CP	A, 'y'
 	JP	Z, shutdown
-	CP	A,'Y'
+	CP	A, 'Y'
 	JP	Z, shutdown
 
+	; Not confirmed, return to CP/M via WBOOT
 	JP	0
 
 shutdown:
-	XOR	A		; Set A to zero for MEGA-GW function 0: shutdown, in this case no further parameter is needed
-	JP	$FFFF
-
-
-msg:	DB "Press Y to confirm MEGA/80 CP/M shutdown (FS changes - if any - will be lost) $"
+	OUT	(GW_SHUTDOWN), A

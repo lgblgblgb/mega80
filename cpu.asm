@@ -1,5 +1,5 @@
 ; ----------------------------------------------------------------------------
-;
+; vi: ft=ca65
 ; Software emulator of the 8080 CPU for the MEGA65, intended for CP/M or such.
 ; Please read comments throughout this source for more information.
 ;
@@ -826,7 +826,7 @@ opc_CF:	OPC_RST		$08		; RST 08h
 opc_D0= opc_RET_NC			; RET NC
 opc_D1:	OPC_POP_RR	cpu_de		; POP DE
 opc_D2= opc_JP_NC			; JP NC,nn
-opc_D3= next_inc2			; OUT (n),A: we don't emulate this, simply skipped
+opc_D3= cpu_out				; OUT (n),A
 opc_D4= opc_CALL_NC			; CALL NZ,nn
 opc_D5:	OPC_PUSH_RR	cpu_de		; PUSH DE
 opc_D6:	INW		cpu_pc		; SUB A,byte
@@ -982,3 +982,11 @@ cpu_leave:
 	STA	cpu_op
 	.IMPORT	return_cpu_leave
 	JMP	return_cpu_leave
+
+cpu_out:
+	TXA
+	ROR	A
+	STA	cpu_op
+	;	It's up to the emulator, to fetch stuff/etc
+	.IMPORT	return_cpu_out
+	JMP	return_cpu_out

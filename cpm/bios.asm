@@ -96,9 +96,8 @@ M65BIOS_GO_CPM:
 	LD	(1), HL
 	LD	HL, M65BDOS_FBASE		; Set-up jump address for BDOS functions
 	LD	(6), HL
-	LD	A, 0x76				; HALT opcode at $FFFF -> special MEGA65 gw for future stuff
-	LD	(0xFFFF),A
-	LD	(0xFFFE),A			; guarding HALT
+	LD	A, 0x76				; HALT opcode at $FFFF
+	LD	(0xFFFF),A			; guarding HALT
 	JP	M65BDOS_CBASE			; Execute CCP (C register is needed to be initialized by the native BIOS before calling us here!)
 
 ; ------------------------------------------------------------

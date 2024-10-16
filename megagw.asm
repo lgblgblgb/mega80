@@ -1,5 +1,5 @@
 ; ----------------------------------------------------------------------------
-;
+; vi: ft=ca65
 ; Software emulator of the 8080 CPU for the MEGA65, intended for CP/M or such.
 ; Please read comments throughout this source for more information.
 ;
@@ -28,142 +28,237 @@
 .INCLUDE "console.inc"
 .INCLUDE "disk.inc"
 
-GW_BUFFER_SIZE = 1024
+HDOS_BUFFER = $400
 
 .BSS
 
-gw_buffer:	.RES	GW_BUFFER_SIZE
-.ASSERT gw_buffer + GW_BUFFER_SIZE < $8000, error, "gw_buffer must be in the low-memory area."
+fd_dir:		.RES	1
+fd_file:	.RES	1
 
 .CODE
 
 
+.EXPORT	megagw_jump_table
+megagw_jump_table:
+	.WORD	gw_activate		; func  0
+	.WORD	gw_shutdown		; func  1
+	.WORD	gw_get_info_str		; func  2
 
-.EXPORT	megagw
-.PROC	megagw
-	LDA	cpu_a
-	CMP	#calls
-	BCS	ret		; carry is already set for error
-	ASL	A
-	TAX
-	JMP	(jump_table,X)
-ret:
-	RTS
-jump_table:
-	.WORD	shutdown		; func  0
-	.WORD	get_host_buffer_addr	; func  1
-	.WORD	get_info_str		; func  2     will use the CP/M dma!!!
-	.WORD	hdos_trap               ; func  3
-calls = (* - jump_table) / 2
-.ENDPROC
+	.WORD	gw_print_asciiz		; func  3
+	.WORD	gw_print_char		; func  4
+	.WORD	gw_print_crlf		; func  5
+	.WORD	gw_print_hex_digit	; func  6
+	.WORD	gw_print_hex_byte	; func  7
+	.WORD	gw_print_hex_word	; func  8
+	.WORD	gw_get_key		; func  9
+	.WORD	gw_print_asciiz_inline  ; func 10
+
+	.WORD	gw_hdos_dir_init	; func 11
+	.WORD	gw_hdos_dir_read	; func 12
+	.WORD	gw_hdos_cd_root
+	.WORD	gw_hdos_cd
+	.WORD	gw_hdos_setname		; func  3	HDOS setname
 
 
-; Format of HDOS call from the viewpoint of CP/M app:
-;
-; Input AND output register registers:
-;       B = host CPU register A
-;       C = host CPU register X
-;       D = host CPU register Y
-;       E = host CPU register Z
-; Output:
-;	FLAGS = carry SET -> OK, carry CLEAR -> ERROR
-; Input register:
-;	A = call ID, 0 -> HDOS trap
-;	HL = mem address of 256 bytes buffer!
-;	Data buffer must be appropiate size for the given call
-;
-; The call itself must be: CALL $FFFF
+;	.WORD	gw_hdos_open_file
+;	.WORD	gw_hdos_open_dir
+;	.WORD	gw_hdos_read_dir
+;	.WORD	gw_hdos_close_dir
+;	.WORD	gw_hdos_read_file
+;	.WORD	gw_hdos_cd_root
+;	.WORD	gw_hdos_cd
+;	.WORD	gw_attach
+;	.WORD	gw_mount
+.EXPORT	megagw_calls
+megagw_calls = (* - megagw_jump_table) / 2
 
-.PROC	call_trap
-	STA	trap_lo_byte
-	LDA	cpu_l
-	STA	copy1
-	STA	copy2
-	LDA	cpu_h
-	STA	copy1+1
-	STA	copy2+2
-	; Copy CP/M buffer for us
-	STA	$D707					; trigger in-line DMA
-	.BYTE	$A,0					; enhanced mode opts
-	.BYTE	0					; DMA command: copy and not chained
-	.WORD	GW_BUFFER_SIZE				; DMA length
-copy1:	.WORD	0					; source addr, in case of "fill" the low byte is the byte to fill with
-	.BYTE	I8080_BANK				; source bank + other info
-	.WORD	gw_buffer				; target addr
-	.BYTE	0					; target bank + other info
-	.WORD	0					; modulo: not used
-	; Load 8080 registers into naitve registers for the TRAP
+
+
+
+.PROC	gw_activate
 	LDA	cpu_b
-	LDX	cpu_c
-	LDY	cpu_d
-	LDZ	cpu_e
-	; The TRAP itself
-trap_lo_byte = * + 1
-	STA	$D640		; The trap!
-	CLV			; MEGA65 safety measure
-	; Save resulting native registers to 8080 registers
-	STA	cpu_b
-	STX	cpu_c
-	STY	cpu_d
-	STZ	cpu_e
-	; Check the carry flag, and transfer it to the 8080 carry flag
-	; (this also means that carry shouldn't be bothered between this point - ADC - and the trap itself above!!)
-	LDA	cpu_f
-	AND	#$FE		; clear 8080 carry flag (bit 0 will be cleared)
-	ADC	#0		; if host carry was set, this actually adds 1 (bit 0 will be set), so we're good :D
-	STA	cpu_f
-	; Copy our buffer to CP/M buffer
-	STA	$D707					; trigger in-line DMA
-	.BYTE	$A,0					; enhanced mode opts
-	.BYTE	0					; DMA command: copy and not chained
-	.WORD	GW_BUFFER_SIZE				; DMA length
-	.WORD	gw_buffer				; source addr, in case of "fill" the low byte is the byte to fill with
-	.BYTE	0					; source bank + other info
-copy2:	.WORD	0					; target addr
-	.BYTE	I8080_BANK				; target bank + other info
-	.WORD	0					; modulo: not used
-	; ... and we're done :D
-	CLC		; Valid call signal (nothing to do with the carry result of the trap itself!!!)
+	CMP	#'M'
+	BNE	bad
+	LDA	cpu_c
+	CMP	#'e'
+	BNE	bad
+	LDA	cpu_d
+	CMP	#'G'
+	BNE	bad
+	LDA	cpu_e
+	CMP	#'a'
+	BNE	bad
+	.IMPORT	is_megagw_active
+	STA	is_megagw_active	; A is non-zero, so it's OK to use here to activate
+	RTS
+bad:	WRISTR	{13,10,"*** WARN: bad MEGAGW act.seq.",13,10}
 	RTS
 .ENDPROC
 
 
-.PROC	get_host_buffer_addr
-	LDA	#.LOBYTE(gw_buffer)
-	STA	cpu_l
-	LDA	#.HIBYTE(gw_buffer)
-	STA	cpu_h
-	CLC
-	RTS
-.ENDPROC
-
-
-.PROC	hdos_trap
-	LDA	#$40	; trap addr low byte
-	JMP	call_trap
-.ENDPROC
-
-
-.PROC	shutdown
-	SEI			; Disable interrupts
-	LDA	#$FF
+.PROC	gw_shutdown
+	; Make sure we closed all HDOS files
+	JSR	hdos_closeall
+	; Do the reset ...
+	SEI
+	LDA	#0
+	TAX
+	TAY
+	TAZ
+	MAP
+	EOM
+	DEA
 	STA	1
 	STA	$D02F		; VIC KEY register, let's mess it up
 	JMP	($FFFC)
 .ENDPROC
 
 
-.PROC	get_info_str
+.PROC	gw_get_info_str
 	.IMPORT	build_info_str
 	LDX	#0
 	LDZ	#0
 :	LDA	build_info_str,X
-	STA32Z	cpm_dma
+	STA32Z	cpu_hl
 	BEQ	:+
 	INX
 	INZ
-	BRA	:-
-:	CLC
+	BNE	:-
+:	RTS
+.ENDPROC
+
+
+.PROC	gw_print_asciiz
+	LDZ	#0
+:	LDA32Z	cpu_hl
+	BEQ	:+
+	JSR	write_char
+	INZ
+	BNE	:-
+:	RTS
+.ENDPROC
+
+
+.PROC	gw_print_asciiz_inline
+	LDZ	#0
+:	LDA32Z	cpu_pc
+	BEQ	:+
+	JSR	write_char
+	INW	cpu_pc
+	BNE	:-
+:	INW	cpu_pc
 	RTS
 .ENDPROC
 
+
+.PROC	gw_print_char
+	LDA	cpu_a
+	JMP	write_char
+.ENDPROC
+
+
+gw_print_crlf = write_crlf
+
+
+.PROC	gw_print_hex_digit
+	LDA	cpu_a
+	JMP	write_hex_nib
+.ENDPROC
+
+
+.PROC	gw_print_hex_byte
+	LDA	cpu_a
+	JMP	write_hex_byte
+.ENDPROC
+
+
+.PROC	gw_print_hex_word
+	LDA	cpu_h
+	JSR	write_hex_byte
+	LDA	cpu_l
+	JMP	write_hex_byte
+.ENDPROC
+
+
+.PROC	gw_get_key
+	JSR	conin_get_with_wait
+	STA	cpu_a
+	RTS
+.ENDPROC
+
+
+.PROC	gw_hdos_setname
+	LDX	#0
+	LDZ	#0
+:	LDA32Z	cpu_hl
+	STA	HDOS_BUFFER,X
+	BEQ	:+
+	INX
+	INZ
+	BNE	:-
+:	LDY	#>HDOS_BUFFER
+	LDA	#$2E
+	STA	$D640
+	CLV
+	STA	cpu_a
+	RTS
+.ENDPROC
+
+
+.EXPORT	hdos_closeall
+.PROC	hdos_closeall
+	LDA	#$FF
+	STA	fd_dir
+	STA	fd_file
+	LDA	#$22		; HDOS "close all" function
+	STA	$D640
+	CLV
+	RTS
+.ENDPROC
+
+
+.PROC	gw_hdos_dir_init
+	JSR	hdos_closeall
+	LDA	#$12
+	STA	$D640
+	CLV
+	STA	cpu_a
+	BCC	:+
+	STA	fd_dir
+:	RTS
+.ENDPROC
+
+
+.PROC	gw_hdos_dir_read
+	LDX	fd_dir
+	BMI	not_open
+	LDA	#$14
+	LDY	#>HDOS_BUFFER
+	STA	$D640
+	CLV
+	BCC	dir_error
+	; Ok, copy things to HL
+	LDX	#0
+	LDZ	#0
+:	LDA	HDOS_BUFFER,X
+	STA32Z	cpu_hl
+	INX
+	INZ
+	BNE	:-
+	SEC
+	RTS
+dir_error:
+	STA	cpu_a
+	RTS
+not_open:
+	CLC
+	RTS
+.ENDPROC
+
+
+.PROC	gw_hdos_cd_root
+.ENDPROC
+
+
+.PROC	gw_hdos_cd
+.ENDPROC

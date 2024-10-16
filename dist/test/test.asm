@@ -252,7 +252,7 @@ HDOS_BUFFER = $400
 	CLC	; too long - longer than 128 bytes?!
 	RTS
 :	LDA	#$2E	; HDOS: "setname" function
-	LDY	#.HIBYTE(HDOS_BUFFER)
+	LDY	#>HDOS_BUFFER
 	STA	$D640
 	CLV
 	RTS
@@ -268,8 +268,8 @@ d81name: .BYTE "DIR.D81",0
 
 
 stub_main:
-	LDA	#.LOBYTE(d81name)
-	LDY	#.HIBYTE(d81name)
+	LDA	#<d81name
+	LDY	#>d81name
 	JSR	hdos_setname
 
 	; Do the actual "mounting"
