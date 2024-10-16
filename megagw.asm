@@ -55,9 +55,8 @@ megagw_jump_table:
 
 	.WORD	gw_hdos_dir_init	; func 11
 	.WORD	gw_hdos_dir_read	; func 12
-	.WORD	gw_hdos_cd_root
-	.WORD	gw_hdos_cd
-	.WORD	gw_hdos_setname		; func  3	HDOS setname
+	.WORD	gw_hdos_cd_root		; func 13
+	.WORD	gw_hdos_cd		; func 14
 
 
 ;	.WORD	gw_hdos_open_file
@@ -76,6 +75,7 @@ megagw_calls = (* - megagw_jump_table) / 2
 
 
 .PROC	gw_activate
+	INC	cpu_a			; modify 8080 A register to signal the presence of MEGA/80
 	LDA	cpu_b
 	CMP	#'M'
 	BNE	bad
@@ -89,7 +89,7 @@ megagw_calls = (* - megagw_jump_table) / 2
 	CMP	#'a'
 	BNE	bad
 	.IMPORT	is_megagw_active
-	STA	is_megagw_active	; A is non-zero, so it's OK to use here to activate
+	STA	is_megagw_active	; Accu is non-zero, so it's OK to use here to activate
 	RTS
 bad:	WRISTR	{13,10,"*** WARN: bad MEGAGW act.seq.",13,10}
 	RTS
@@ -187,7 +187,7 @@ gw_print_crlf = write_crlf
 .ENDPROC
 
 
-.PROC	gw_hdos_setname
+.PROC	hdos_setname_from_hl
 	LDX	#0
 	LDZ	#0
 :	LDA32Z	cpu_hl
@@ -197,10 +197,10 @@ gw_print_crlf = write_crlf
 	INZ
 	BNE	:-
 :	LDY	#>HDOS_BUFFER
+	LDX	#0
 	LDA	#$2E
 	STA	$D640
 	CLV
-	STA	cpu_a
 	RTS
 .ENDPROC
 
@@ -256,9 +256,35 @@ not_open:
 .ENDPROC
 
 
+.PROC	hdos_get_current_drive
+	LDA	#$04
+	STA	$D640
+	CLV
+	TAX
+	RTS
+.ENDPROC
+
+
 .PROC	gw_hdos_cd_root
+	JSR	hdos_get_current_drive	; X: disk ???????
+	LDA	#$3C
+	STA	$D640
+	CLV
+	STA	cpu_a
+	RTS
 .ENDPROC
 
 
 .PROC	gw_hdos_cd
+	JSR	hdos_setname_from_hl
+	BCC	error
+	LDA	#$34		; findfile
+	STA	$D640
+	CLV
+	BCC	error
+	LDA	#$0C
+	STA	$D640
+	CLV
+error:	STA	cpu_a
+	RTS
 .ENDPROC
