@@ -59,7 +59,7 @@ megagw_jump_table:
 	.WORD	gw_hdos_cd		; func 14
 
 
-;	.WORD	gw_hdos_open_file
+	.WORD	gw_hdos_attach		; func 15
 ;	.WORD	gw_hdos_open_dir
 ;	.WORD	gw_hdos_read_dir
 ;	.WORD	gw_hdos_close_dir
@@ -286,5 +286,61 @@ not_open:
 	STA	$D640
 	CLV
 error:	STA	cpu_a
+	RTS
+.ENDPROC
+
+
+.PROC	gw_hdos_attach
+	JSR	hdos_setname_from_hl
+	BCC	error
+	; Just to be at the safe side,
+	LDZ	#0
+	STZ	$D690
+	STZ	$D691
+	STZ	$D692
+	STZ	$D693
+	LDA	#$46		; HDOS attach_d81 for "drive 1" function
+	STA	$D640
+	CLV
+	BCS	ok
+error:	STA	cpu_a
+	RTS
+ok:
+	; Attach via HYPPO was successfull. Now check the "mount registers" if it's OK for us
+	; (Xemu "virtual" mount anomalies, D64/D65 formats, etc ...)
+	; GS $D68A.3 SD:VFDC1 (read only) Set if drive 1 is virtualised (sectors delivered via serial monitor interface)
+	; GS $D68A.7 SDFDC:D1D64 F011 drive 1 disk image is D64 if set, otherwise D81 (also see SDFDC:D1MD)
+	LDA	$D68A
+	AND	#128+8
+	BNE	badimg
+	; GS $D68B.3 SDFDC:D1IMG F011 drive 1 use disk image if set, otherwise use real floppy drive.
+	; GS $D68B.7 SDFDC:D1MD F011 drive 1 disk image is D65 if set, otherwise D81 (also see SDFDC:D1D64)
+	LDA	$D68B
+	BMI	badimg		; not testing bit 3 though, it won't work with Xemu
+	; Process mounted position
+	LDA	#'@'
+	JSR	write_char
+	LDA	$D693
+	JSR	write_hex_byte
+	LDA	$D692
+	JSR	write_hex_byte
+	LDA	$D691
+	JSR	write_hex_byte
+	LDA	$D690
+	JSR	write_hex_byte
+	JSR	write_crlf
+	SEC
+	RTS
+badimg:
+	WRISTR	{"Bad image!", 13, 10, "D68A="}
+	LDA	$D68A
+	JSR	write_hex_byte
+	WRISTR  {" D68B="}
+	LDA	$D68B
+	JSR	write_hex_byte
+	JSR	write_crlf
+	CLC
+	LDA	#$FF
+	STA	cpu_a
 	RTS
 .ENDPROC

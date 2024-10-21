@@ -33,12 +33,11 @@ LD65_OPTS	= -C $(LD65_CFG) -m $(MAP_FILE) -vm
 XEMU_M65	= xemu-xmega65
 #XEMU_M65	= /home/lgb/prog_here/xemu-dev/build/bin/xmega65.native
 
-ETHERLOAD	= mega65-etherload
+ETHERLOAD	= mega65_etherload
 C1541		= c1541
 CA65		= ca65
 LD65		= ld65
 RM		= rm
-GUNZIP		= gunzip
 
 
 all: $(DISK_IMAGE)

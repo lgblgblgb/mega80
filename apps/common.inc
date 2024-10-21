@@ -1,4 +1,27 @@
-; vi: ft=z8a.vim
+; vi: ft=z8a
+; ----------------------------------------------------------------------------
+;
+; Software emulator of the 8080 CPU for the MEGA65, intended for CP/M or such.
+; Please read comments throughout this source for more information.
+;
+; Copyright (C)2017,2024 LGB (Gábor Lénárt) <lgblgblgb@gmail.com>
+;
+; ----------------------------------------------------------------------------
+;
+; This program is free software; you can redistribute it and/or modify
+; it under the terms of the GNU General Public License as published by
+; the Free Software Foundation; either version 3 of the License, or
+; (at your option) any later version.
+;
+; This program is distributed in the hope that it will be useful,
+; but WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+; GNU General Public License for more details.
+;
+; You should have received a copy of the GNU General Public License
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+;
+; ----------------------------------------------------------------------------
 
 	ORG	0x100
 
@@ -47,3 +70,4 @@ GW_INIT_DIR		= 11
 GW_READ_DIR		= 12
 GW_CHROOT		= 13
 GW_CHDIR		= 14
+GW_ATTACH		= 15
